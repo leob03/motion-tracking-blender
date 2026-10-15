@@ -1,0 +1,57 @@
+{
+  "crafty_comfy": {
+    "commit": "a710485c5aff6a0ae0c2db58c4df1c64aff063c5",
+    "origin": "https://gitlab.com/crafty-ops/ml/apps/comfyui/ComfyUI.git",
+    "tracked_tree_not_audited": true
+  },
+  "gvhmr_comfy_host": {
+    "commit": "ddc541ffdae0fe626de5a33192001f31c6ab93c6",
+    "origin": "https://github.com/comfyanonymous/ComfyUI.git",
+    "tracked_tree_not_audited": true,
+    "commit_available_upstream": true
+  },
+  "gvhmr_node": {
+    "commit": "35c8dbc4de14448d4626a0f99e32c869371fea12",
+    "origin": "https://github.com/PozzettiAndrea/ComfyUI-MotionCapture.git",
+    "tracked_tree_not_audited": true,
+    "checked_source_files": {
+      "nodes/inference_node.py": "b462f17fcb27389a0ace8ab18806dacfa6101ac476b6e97b89e426a346e830bb",
+      "nodes/body_model/smplx_utils.py": "8bd00d5fe213b9273beb554abd3576e0abd03a8bd4ee287516520ed31c87ebff",
+      "nodes/body_model/smplx_lite.py": "ca3b22fa5bb4c702caab8f507924674d66a8a0112c979aa67e1c6d1e8a504152"
+    },
+    "commit_available_upstream": true
+  },
+  "sam_comfy": {
+    "commit": "88ab4a06566454ad89db8f0bedb970d6c08cd1b7",
+    "origin": "https://github.com/Comfy-Org/ComfyUI.git",
+    "tracked_tree_not_audited": true,
+    "checked_source_files": {
+      "comfy_extras/nodes_sam3d_body.py": "52e224f80c1375cba8f038c6cbf63dcc78a995b47d526218e03fbc2063b982dd",
+      "comfy_extras/sam3d_body/export/glb_skeletal.py": "d0ac61b46c1ca62f26e468a127c96f630288efb158cfb90f9aa9cd8480204fd8",
+      "comfy/ldm/sam3d_body/model/model.py": "44908c31431cf826fc328479c116ca410bf22c838651e03fe009a7946d50ecff"
+    },
+    "commit_available_upstream": true
+  },
+  "realdenseface": {
+    "commit": "2821455af2c5d8996aec14000b37abf5dacc24f1",
+    "origin": "https://github.com/LinzhouLi/RealDenseFace.git",
+    "tracked_tree_not_audited": true,
+    "selected_source_patch": "provenance/patches/realdenseface.patch",
+    "checked_source_files": {
+      "tracker/inference/realdenseface_inferencer.py": "14e8460cd8aa246565b52c8edbef657ebeeab75bead9a889b9dcbd7c248ffa15"
+    },
+    "commit_available_upstream": true
+  },
+  "mhr_assets": {
+    "commit": "d96fafa33bbf018647c70c3525e91f53e79d2a14",
+    "origin": "https://github.com/facebookresearch/MHR.git",
+    "tracked_tree_not_audited": true,
+    "commit_available_upstream": true
+  },
+  "smirk_embedding": {
+    "commit": "c7de404c4389f073906a6db1adabf62efcea3f35",
+    "origin": "https://github.com/georgeretsi/smirk.git",
+    "tracked_tree_not_audited": true,
+    "commit_available_upstream": true
+  }
+}

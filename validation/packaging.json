@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-15",
+  "runtime_source_bytes_preserved": true,
+  "blender": "4.4.0",
+  "synthetic": {
+    "frames": 8,
+    "method": "fixture",
+    "markers": 0,
+    "max_mesh_error_m": 1.9073486345888568e-07,
+    "max_camera_position_error_m": 2.980232227667301e-09,
+    "max_camera_reprojection_error_px": 9.028116861031776e-05,
+    "preserves_existing_objects": true,
+    "fps": 29.97002997002997,
+    "first_frame": 1001,
+    "tested_frames": [
+      0,
+      4,
+      7
+    ]
+  },
+  "invalid_bundle": {
+    "unknown_schema_rejected": true,
+    "invalid_topology_rejected": true,
+    "invalid_rig_hierarchy_rejected": true,
+    "invalid_skin_weights_rejected": true,
+    "no_scene_changes_on_validation_failure": true
+  },
+  "model_files": 17,
+  "local_model_sha256_audited": true,
+  "four_hf_checkpoint_hashes_match_upstream": true,
+  "inference_rerun": false,
+  "new_worker_container_validated": false,
+  "windows_validated": false,
+  "artist_zip_exact_source": true,
+  "worker_zip_exact_source": true,
+  "worker_zip_files": 14
+}

@@ -1,0 +1,54 @@
+[
+  {
+    "method": "hybrid",
+    "frames": 12,
+    "bones": 127,
+    "max_mesh_error_m": 5.960464477539062e-07,
+    "max_projection_error_px": 0.0004985553962342237,
+    "organized_children": 2,
+    "reference_markers": 0,
+    "cameras_visible": true,
+    "bone_edits": [
+      {
+        "bone": "l_lowarm",
+        "max_displacement_m": 0.09663934260606766,
+        "unaffected_error_m": 0.0,
+        "keyed_edit_persists": true
+      },
+      {
+        "bone": "l_index2",
+        "max_displacement_m": 0.010914993472397327,
+        "unaffected_error_m": 0.0,
+        "keyed_edit_persists": true
+      }
+    ],
+    "camera_switches_work": true,
+    "existing_objects_preserved": true
+  },
+  {
+    "method": "gvhmr",
+    "frames": 12,
+    "bones": 55,
+    "max_mesh_error_m": 7.152557373046875e-07,
+    "max_projection_error_px": 0.00012579021830561032,
+    "organized_children": 2,
+    "reference_markers": 0,
+    "cameras_visible": true,
+    "bone_edits": [
+      {
+        "bone": "left_elbow",
+        "max_displacement_m": 0.10774443298578262,
+        "unaffected_error_m": 0.0,
+        "keyed_edit_persists": true
+      },
+      {
+        "bone": "left_index2",
+        "max_displacement_m": 0.012014511041343212,
+        "unaffected_error_m": 0.0,
+        "keyed_edit_persists": true
+      }
+    ],
+    "camera_switches_work": true,
+    "existing_objects_preserved": true
+  }
+]

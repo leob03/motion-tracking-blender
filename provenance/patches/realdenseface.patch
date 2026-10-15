@@ -1,0 +1,28 @@
+diff --git a/tracker/inference/realdenseface_inferencer.py b/tracker/inference/realdenseface_inferencer.py
+index 8896936..0986d10 100644
+--- a/tracker/inference/realdenseface_inferencer.py
++++ b/tracker/inference/realdenseface_inferencer.py
+@@ -1,4 +1,4 @@
+-﻿from __future__ import annotations
++from __future__ import annotations
+ 
+ import cv2
+ import nvdiffrast.torch as dr
+@@ -56,7 +56,7 @@ class RealDenseFaceInferencer:
+         self.flame_vertex_uv = torch.from_numpy(flame_assets["vertex_uvs"]).to(self.device).unsqueeze(0).unsqueeze(2) * 2.0 - 1.0
+         self.key_vertex_ids = torch.from_numpy(self.vis_edges).to(dtype=torch.int64, device=self.device).flatten().unique()
+         self.faces_int32 = torch.from_numpy(np.asarray(flame_assets["faces"], dtype=np.int32)).to(dtype=torch.int32, device=self.device).contiguous()
+-        self.visibility_glctx = dr.RasterizeCudaContext()
++        self.visibility_glctx = dr.RasterizeCudaContext() if config.filter_occluded_vertices else None
+ 
+         self.facebox_config = FaceBoxConfig() if facebox_config is None else facebox_config
+         self.face_detector = self._create_face_detector()
+@@ -94,7 +94,7 @@ class RealDenseFaceInferencer:
+         with torch.autocast(
+             device_type=self.device.type,
+             dtype=torch.bfloat16,
+-            enabled=self.device.type == "cuda",
++            enabled=self.device.type == "cuda" and torch.cuda.is_bf16_supported(),
+         ):
+             coords, coord_log_vars, depths, depth_log_vars = self.model(image)
+             coords = coords / self.scale_coord

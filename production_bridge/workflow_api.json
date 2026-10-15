@@ -1,0 +1,19 @@
+{
+  "1": {
+    "class_type": "MocapProcessVideo",
+    "inputs": {
+      "video": "mocap/UPLOADED_VIDEO_NAME.mp4",
+      "method": "hybrid",
+      "start_frame": 0,
+      "max_frames": 120,
+      "actor_index": -1,
+      "moving_camera": true,
+      "fps_override": 0.0,
+      "focal_px": 0.0,
+      "max_side": 1280,
+      "sam_smoothing": 1.0,
+      "hand_refinement": true,
+      "face_capture": "none"
+    }
+  }
+}

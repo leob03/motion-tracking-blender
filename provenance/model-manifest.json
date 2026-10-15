@@ -1,0 +1,242 @@
+{
+  "schema_version": 1,
+  "audited": "2026-10-15",
+  "hash_method": "Sequential 8 MiB reads of explicitly listed assets; no directory scans.",
+  "root_meanings": {
+    "nightly_models": "ComfyUI_nightly/models (currently fixed development path)",
+    "gvhmr_node": "Reviewed ComfyUI-MotionCapture checkout",
+    "study": "MOCAP_STUDY_ROOT"
+  },
+  "hf_revisions": {
+    "apozz/motion-capture-safetensors": "4d1ff1105aad31ef01d2aa2c1151a0317d267925",
+    "Comfy-Org/sam-3d-body": "7c974aea58e062252a6cb5b6f9b7f639d545b729"
+  },
+  "files": [
+    {
+      "id": "gvhmr",
+      "root": "nightly_models",
+      "path": "motion_capture/gvhmr.safetensors",
+      "features": [
+        "all"
+      ],
+      "url": "https://huggingface.co/apozz/motion-capture-safetensors/resolve/4d1ff1105aad31ef01d2aa2c1151a0317d267925/gvhmr.safetensors",
+      "source_kind": "download",
+      "aliases": [],
+      "bytes": 163436944,
+      "sha256": "4af7ef698daf94ca67b0e37e71ebbb5929f8194cacbffea89b7c9cfe41d7ed8e",
+      "upstream_sha256_matches": true
+    },
+    {
+      "id": "vitpose",
+      "root": "nightly_models",
+      "path": "motion_capture/vitpose.safetensors",
+      "features": [
+        "all"
+      ],
+      "url": "https://huggingface.co/apozz/motion-capture-safetensors/resolve/4d1ff1105aad31ef01d2aa2c1151a0317d267925/vitpose.safetensors",
+      "source_kind": "download",
+      "aliases": [],
+      "bytes": 2548881980,
+      "sha256": "d16416a8f56799afae87233d433eb81d377a1af45c2d31de9799b73bfe56824e",
+      "upstream_sha256_matches": true
+    },
+    {
+      "id": "hmr2",
+      "root": "nightly_models",
+      "path": "motion_capture/hmr2.safetensors",
+      "features": [
+        "all"
+      ],
+      "url": "https://huggingface.co/apozz/motion-capture-safetensors/resolve/4d1ff1105aad31ef01d2aa2c1151a0317d267925/hmr2.safetensors",
+      "source_kind": "download",
+      "aliases": [],
+      "bytes": 2709332301,
+      "sha256": "49107d7a0a12b886da80d1b736b8e1c10b8685f22b5e4d73e2173605f7eadc8b",
+      "upstream_sha256_matches": true
+    },
+    {
+      "id": "actor_detector",
+      "root": "nightly_models",
+      "path": "ultralytics/segm/yolov8m-seg.pt",
+      "features": [
+        "all"
+      ],
+      "url": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8m-seg.pt",
+      "source_kind": "download",
+      "aliases": [],
+      "bytes": 54899779,
+      "sha256": "f9fc740ca0824e14b44681d491dc601efa664ec6ecea9a870acf876053826448"
+    },
+    {
+      "id": "smplx_neutral",
+      "root": "nightly_models",
+      "path": "motion_capture/body_models/smplx/SMPLX_NEUTRAL.npz",
+      "features": [
+        "all"
+      ],
+      "url": "https://smpl-x.is.tue.mpg.de/",
+      "source_kind": "registration_download",
+      "aliases": [],
+      "bytes": 108752058,
+      "sha256": "376021446ddc86e99acacd795182bbef903e61d33b76b9d8b359c2b0865bd992"
+    },
+    {
+      "id": "sam_body",
+      "root": "study",
+      "path": "models/sam_3d_body_dinov3_bf16.safetensors",
+      "features": [
+        "hybrid"
+      ],
+      "url": "https://huggingface.co/Comfy-Org/sam-3d-body/resolve/7c974aea58e062252a6cb5b6f9b7f639d545b729/detection/sam_3d_body_dinov3_bf16.safetensors",
+      "source_kind": "download",
+      "aliases": [],
+      "bytes": 2830737652,
+      "sha256": "59fa45200c504c5b56625004d7d3385daf48c616613e88099e43bf83b3e249cf",
+      "upstream_sha256_matches": true
+    },
+    {
+      "id": "smplx2smpl_sparse.npz",
+      "root": "gvhmr_node",
+      "path": "nodes/body_model/smplx2smpl_sparse.npz",
+      "features": [
+        "all"
+      ],
+      "url": "https://raw.githubusercontent.com/PozzettiAndrea/ComfyUI-MotionCapture/35c8dbc4de14448d4626a0f99e32c869371fea12/nodes/body_model/smplx2smpl_sparse.npz",
+      "source_kind": "source_asset",
+      "aliases": [],
+      "bytes": 48354,
+      "sha256": "a5b108ddbb12627b5305e7e026a39bdc048a358ebdd2f3d5c6aabd2b399131f0"
+    },
+    {
+      "id": "smpl_coco17_J_regressor.npy",
+      "root": "gvhmr_node",
+      "path": "nodes/body_model/smpl_coco17_J_regressor.npy",
+      "features": [
+        "all"
+      ],
+      "url": "https://raw.githubusercontent.com/PozzettiAndrea/ComfyUI-MotionCapture/35c8dbc4de14448d4626a0f99e32c869371fea12/nodes/body_model/smpl_coco17_J_regressor.npy",
+      "source_kind": "source_asset",
+      "aliases": [],
+      "bytes": 468648,
+      "sha256": "0cd49241810715e752aa7384363b7bc09fb96b386ca99aa1c3eb2c0d15d6b8b9"
+    },
+    {
+      "id": "smplx_verts437.npy",
+      "root": "gvhmr_node",
+      "path": "nodes/body_model/smplx_verts437.npy",
+      "features": [
+        "all"
+      ],
+      "url": "https://raw.githubusercontent.com/PozzettiAndrea/ComfyUI-MotionCapture/35c8dbc4de14448d4626a0f99e32c869371fea12/nodes/body_model/smplx_verts437.npy",
+      "source_kind": "source_asset",
+      "aliases": [],
+      "bytes": 3624,
+      "sha256": "157b0c4394ad4ab5d460e2851ecfb3d493e37969f615574f55fa9a6aeea5d952"
+    },
+    {
+      "id": "realdenseface_vitb",
+      "root": "study",
+      "path": "vendor/RealDenseFace/weights/realdenseface/vitb.pth",
+      "features": [
+        "realdenseface_flame"
+      ],
+      "url": "https://drive.google.com/file/d/1eLlN_BCFMn0jSo0lNwBFqtI6igTh7Nc3/view",
+      "source_kind": "release_archive",
+      "aliases": [],
+      "bytes": 904499225,
+      "sha256": "3b3bbd026c277aae561aed0047f43bbae2833c000779904f6dd73e97e321c604"
+    },
+    {
+      "id": "facebox",
+      "root": "study",
+      "path": "vendor/RealDenseFace/weights/facebox/face_box.pth",
+      "features": [
+        "realdenseface_flame"
+      ],
+      "url": "https://drive.google.com/file/d/1eLlN_BCFMn0jSo0lNwBFqtI6igTh7Nc3/view",
+      "source_kind": "release_archive",
+      "aliases": [],
+      "bytes": 4176879,
+      "sha256": "3fde8561f059dd60d876021cbd2f67d955d5e02f24c25b297913a4115e433b4d"
+    },
+    {
+      "id": "flame_assets",
+      "root": "study",
+      "path": "vendor/RealDenseFace/weights/flame/flame_assets.npz",
+      "features": [
+        "realdenseface_flame"
+      ],
+      "url": "https://drive.google.com/file/d/1eLlN_BCFMn0jSo0lNwBFqtI6igTh7Nc3/view",
+      "source_kind": "release_archive",
+      "aliases": [],
+      "bytes": 379832,
+      "sha256": "922cb76f3afef0c2e9801a63991de269a98e6b67b1728232493f851589151dd3"
+    },
+    {
+      "id": "flame2023",
+      "root": "study",
+      "path": "models/face/flame_downloads/FLAME2023/flame2023.pkl",
+      "features": [
+        "realdenseface_flame"
+      ],
+      "url": "https://flame.is.tue.mpg.de/",
+      "source_kind": "registration_download",
+      "aliases": [],
+      "bytes": 53023716,
+      "sha256": "8fb1af0db1abb51053ead8fd1f2624a63d01c9602f4a4fb4ea23bd2c82017fa0"
+    },
+    {
+      "id": "mhr2smplx_mapping.npz",
+      "root": "study",
+      "path": "vendor/MHR/tools/mhr_smpl_conversion/assets/mhr2smplx_mapping.npz",
+      "features": [
+        "realdenseface_flame"
+      ],
+      "url": "https://raw.githubusercontent.com/facebookresearch/MHR/d96fafa33bbf018647c70c3525e91f53e79d2a14/tools/mhr_smpl_conversion/assets/mhr2smplx_mapping.npz",
+      "source_kind": "source_asset",
+      "aliases": [],
+      "bytes": 249356,
+      "sha256": "d6d023f9f483be73cd4491d0ddf217450627263405c9bc6bf43795dfff809af1"
+    },
+    {
+      "id": "head_hand_mask.npz",
+      "root": "study",
+      "path": "vendor/MHR/tools/mhr_smpl_conversion/assets/head_hand_mask.npz",
+      "features": [
+        "realdenseface_flame"
+      ],
+      "url": "https://raw.githubusercontent.com/facebookresearch/MHR/d96fafa33bbf018647c70c3525e91f53e79d2a14/tools/mhr_smpl_conversion/assets/head_hand_mask.npz",
+      "source_kind": "source_asset",
+      "aliases": [],
+      "bytes": 222040,
+      "sha256": "60a64a305731dcc1c09f167dfa844246443b3115ae05abebe3813aa64a9ba2ae"
+    },
+    {
+      "id": "flame_landmark_embedding",
+      "root": "study",
+      "path": "vendor/smirk/assets/landmark_embedding.npy",
+      "features": [
+        "realdenseface_flame"
+      ],
+      "url": "https://raw.githubusercontent.com/georgeretsi/smirk/c7de404c4389f073906a6db1adabf62efcea3f35/assets/landmark_embedding.npy",
+      "source_kind": "source_asset",
+      "aliases": [],
+      "bytes": 31292,
+      "sha256": "8095348eeafce5a02f6bd8765146307f9567a3f03b316d788a2e47336d667954"
+    },
+    {
+      "id": "smpl_mean_params",
+      "root": "gvhmr_node",
+      "path": "nodes/hmr2/smpl_mean_params.npz",
+      "features": [
+        "all"
+      ],
+      "url": "https://raw.githubusercontent.com/PozzettiAndrea/ComfyUI-MotionCapture/35c8dbc4de14448d4626a0f99e32c869371fea12/nodes/hmr2/smpl_mean_params.npz",
+      "source_kind": "source_asset",
+      "aliases": [],
+      "bytes": 1310,
+      "sha256": "6fd6dd687800da946d0a0492383f973b92ec20f166a0b829775882868c35fcdd"
+    }
+  ],
+  "total_unique_bytes": 9379144990
+}

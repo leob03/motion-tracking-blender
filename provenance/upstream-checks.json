@@ -1,0 +1,42 @@
+[
+  {
+    "id": "gvhmr",
+    "upstream_sha256_matches": true
+  },
+  {
+    "id": "vitpose",
+    "upstream_sha256_matches": true
+  },
+  {
+    "id": "hmr2",
+    "upstream_sha256_matches": true
+  },
+  {
+    "id": "sam_body",
+    "upstream_sha256_matches": true
+  },
+  {
+    "source": "gvhmr_node",
+    "commit_available_upstream": true
+  },
+  {
+    "source": "sam_comfy",
+    "commit_available_upstream": true
+  },
+  {
+    "source": "realdenseface",
+    "commit_available_upstream": true
+  },
+  {
+    "source": "mhr_assets",
+    "commit_available_upstream": true
+  },
+  {
+    "source": "smirk_embedding",
+    "commit_available_upstream": true
+  },
+  {
+    "source": "gvhmr_comfy_host",
+    "commit_available_upstream": true
+  }
+]

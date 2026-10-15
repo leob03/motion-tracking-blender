@@ -1,0 +1,16 @@
+{
+  "frames": 8,
+  "method": "fixture",
+  "markers": 0,
+  "max_mesh_error_m": 1.9073486345888568e-07,
+  "max_camera_position_error_m": 2.980232227667301e-09,
+  "max_camera_reprojection_error_px": 9.028116861031776e-05,
+  "preserves_existing_objects": true,
+  "fps": 29.97002997002997,
+  "first_frame": 1001,
+  "tested_frames": [
+    0,
+    4,
+    7
+  ]
+}

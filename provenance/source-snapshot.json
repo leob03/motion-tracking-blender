@@ -1,0 +1,132 @@
+{
+  "date": "2026-10-15",
+  "addon_version": "0.3.1",
+  "note": "Exact copies of tested project source; excludes weights, media, generated outputs and external checkouts.",
+  "files": [
+    {
+      "path": "production_bridge/worker.py",
+      "sha256": "b8d91c9355f19ffc1c97db95657250d492620f9ea4e0ea5a9455815ab6b9271b",
+      "bytes": 15054
+    },
+    {
+      "path": "production_bridge/face_worker.py",
+      "sha256": "8cf5541321988eb6a1ef459d8af661aa1f5d12b8cc143308f9c650d37f226575",
+      "bytes": 8377
+    },
+    {
+      "path": "production_bridge/rig_export.py",
+      "sha256": "2ad1fbc6a7dc3863599fd5565639054ae2c87ba19df1950e966e2e957dc8ff96",
+      "bytes": 7065
+    },
+    {
+      "path": "production_bridge/progress.py",
+      "sha256": "24b8d8f69aea4eaff5c5e71e6cd2acfe71bd3f61a06aae1a32d433ad3cd7ad14",
+      "bytes": 974
+    },
+    {
+      "path": "production_bridge/mhr_bone_names.json",
+      "sha256": "f8e32213485319254b5238388680edbef5c6b189de4dcb0b34a9177047e1715d",
+      "bytes": 2277
+    },
+    {
+      "path": "production_bridge/workflow_api.json",
+      "sha256": "1d419552d1c8d40c15f4e768f46639fe524fdfd18402bbdb68a2edecffc1a499",
+      "bytes": 417
+    },
+    {
+      "path": "production_bridge/run_local_server.sh",
+      "sha256": "bf3069ecb53f1e249011c3dc299973c708bd86403fda81b76a6cff85ff0e16bb",
+      "bytes": 960
+    },
+    {
+      "path": "production_bridge/package_addon.py",
+      "sha256": "bc57d44f44374af48c414eefb1eab3620fc0c75e9aa88e69f8df05e42ee847e6",
+      "bytes": 490
+    },
+    {
+      "path": "production_bridge/mocap_comfy/__init__.py",
+      "sha256": "1303dac7d70d0fb900df0e6b5c543f0f26e3a848d1c0e99e7d99fd049e1a1097",
+      "bytes": 22273
+    },
+    {
+      "path": "production_bridge/mocap_comfy/client.py",
+      "sha256": "c79386d6d8f895cfeeabc20eb57b935b7fc6fe5ba90072529f699b686da0b8c2",
+      "bytes": 9399
+    },
+    {
+      "path": "production_bridge/mocap_comfy/importer.py",
+      "sha256": "7934d3c137958b0b13e62d2972c8b4e26fdeb146ca03779395e90e85d8035204",
+      "bytes": 11292
+    },
+    {
+      "path": "production_bridge/mocap_comfy/rig.py",
+      "sha256": "aa3ead991a7a5964962e60063f9525d67e9724cdf4b1715df2eb8b02c2b1b9cc",
+      "bytes": 4326
+    },
+    {
+      "path": "production_bridge/mocap_comfy/log_view.py",
+      "sha256": "9ef58a04d032aa68b3886bb95b0f25e1bab21f60a377d55aa44e7723073f5768",
+      "bytes": 3987
+    },
+    {
+      "path": "production_bridge/comfy_nodes/__init__.py",
+      "sha256": "075b160000669dad052b67daabe995a5f0248dbede2f0ae20b3adc2964ccd4c7",
+      "bytes": 8686
+    },
+    {
+      "path": "production_bridge/comfy_nodes/progress_api.py",
+      "sha256": "1c333d76c6d3f4ec71dfda0eb7d3e8feacfd9d3e6b78b84962b7d3351f3f99ed",
+      "bytes": 2395
+    },
+    {
+      "path": "comparison_study/run_model.py",
+      "sha256": "a98d42ece9d84232b3afdc2431f778d59ea69787c4464111dbcd9a7005aff7c6",
+      "bytes": 12427
+    },
+    {
+      "path": "comparison_study/character_selection.py",
+      "sha256": "92904cdcaed62b43b7816b7ca519511abf505b81b440d4a5824e66fc01f56184",
+      "bytes": 7441
+    },
+    {
+      "path": "comparison_study/build_root_orientation.py",
+      "sha256": "d84155a75e9cfcc0ccd941538006ec429da2c34b5dd66b77f30b98494cae3dea",
+      "bytes": 5256
+    },
+    {
+      "path": "comparison_study/build_hybrid_candidates.py",
+      "sha256": "34913c297892dfb1e7476e71cfc350d7e2f1455be2ca6208873a8da706c39e5b",
+      "bytes": 5247
+    },
+    {
+      "path": "comparison_study/join_neck.py",
+      "sha256": "a01d2d5181ea41948494ebbd1e22e168c62542b77b547acf61442212588a3914",
+      "bytes": 6184
+    },
+    {
+      "path": "production_bridge/tests/make_fixture.py",
+      "sha256": "69f2be0dab504df1dd38bee2f3b92de64f7b6b7a8dac1b7dc6c63a628b16b301",
+      "bytes": 1426
+    },
+    {
+      "path": "production_bridge/tests/blender_validate.py",
+      "sha256": "3dd84c2e3a3865e1c30c780a6e6de5d9ff286bb9d2f32c48389705b9dc9297c6",
+      "bytes": 3745
+    },
+    {
+      "path": "production_bridge/tests/blender_reject_invalid.py",
+      "sha256": "5c0fd64a354c290b0e918531e32b618c3f3e878af3856245e3b19115c1534b13",
+      "bytes": 2827
+    },
+    {
+      "path": "production_bridge/tests/run_api_job.py",
+      "sha256": "045a4e741d2826c3a75a768fbb28c98cb2d5755ca3f346d54737b032f414eed4",
+      "bytes": 2167
+    },
+    {
+      "path": "production_bridge/tests/blender_log_view.py",
+      "sha256": "fa511360b98a41614a9c4f418d1849928b1d1b24503e7491c4755f0c91e90202",
+      "bytes": 4900
+    }
+  ]
+}

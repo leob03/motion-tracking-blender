@@ -1,0 +1,16 @@
+{
+  "blender": "4.4.0",
+  "version": [
+    0,
+    3,
+    1
+  ],
+  "opens_right_of_viewport": true,
+  "repeated_open_reuses_pane": true,
+  "close_from_header_and_sidebar": true,
+  "original_view_and_other_editors_preserved": true,
+  "next_job_reuses_pane": true,
+  "disable_reenable_keeps_log_recognizable": true,
+  "no_log_no_split": true,
+  "default_frame_count": 0
+}
