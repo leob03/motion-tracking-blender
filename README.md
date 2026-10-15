@@ -22,7 +22,7 @@ The hybrid does not give SAM independent world recovery. Its Video Fit Camera pr
 - **Checks:** [Validation and limitations](docs/VALIDATION.md)
 - **Maintainer:** [Build, change and release workflow](docs/DEVELOPMENT.md)
 
-Build packages using ordinary Python 3:
+Download the artist add-on and worker source ZIPs from the [0.3.1 prototype release](https://github.com/leob03/motion-tracking-blender/releases/tag/v0.3.1), or build them using ordinary Python 3:
 
 ```bash
 python scripts/build_packages.py

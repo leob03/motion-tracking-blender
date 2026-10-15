@@ -2,7 +2,7 @@
 
 ## Install
 
-Build with `python scripts/build_packages.py`, then install `dist/mocap_comfy-0.3.1.zip` through **Edit → Preferences → Add-ons → Install from Disk**. Enable **Mocap ComfyUI**. Blender 4.4.0 on Linux is the current tested version; the add-on declares 4.2+ support. Windows compatibility is intended but has not been exercised here.
+Download `mocap_comfy-0.3.1.zip` from the [0.3.1 prototype release](https://github.com/leob03/motion-tracking-blender/releases/tag/v0.3.1), or build it with `python scripts/build_packages.py` (output in `dist/`). Install the ZIP through **Edit → Preferences → Add-ons → Install from Disk**. Enable **Mocap ComfyUI**. Blender 4.4.0 on Linux is the current tested version; the add-on declares 4.2+ support. Windows compatibility is intended but has not been exercised here.
 
 Open the 3D View sidebar with **N**, then **Mocap**. Enter the worker's ComfyUI URL. For a local worker use `http://127.0.0.1:8188`. A remote worker can use the team's approved HTTP(S) endpoint or an SSH tunnel:
 
