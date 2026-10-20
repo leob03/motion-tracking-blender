@@ -1,13 +1,13 @@
-# Result bundle v1
+# Result bundle v1 / v2
 
 The downloaded `.mocap.zip` is data. The artist importer never runs downloaded Python or loads uploaded pickles. `read_bundle` validates schema, array shapes, finite values, topology, skin weights and hierarchy before creating scene objects.
 
 Members:
 
-- `manifest.json`: `schema="mocap-blender-bundle"`, `version=1`, method, FPS/dimensions/frame count, source start, track ID, coordinate notes, inference options/provenance and timings.
+- `manifest.json`: `schema="mocap-blender-bundle"`, `version=1` for legacy/body results or `version=2` for editable FLAME, method, FPS/dimensions/frame count, source start, track ID, coordinate notes, inference options/provenance and timings.
 - `animation.npz`: arrays listed below; loaded with `allow_pickle=False`.
 - `actor_preview.jpg`, `tracking.json`: selected first-frame actor and tracked boxes.
-- `face_parameters.npz`: optional SAM expression parameters or RealDenseFace fitted FLAME parameters. These are retained for future editing/retargeting; no facial-control rig is constructed from them yet.
+- `face_parameters.npz`: optional SAM expression parameters or RealDenseFace fitted FLAME parameters. The worker uses retained FLAME parameters to construct editable controls; the artist importer uses the validated numeric editing arrays.
 
 The synthetic test omits preview/tracking. Older v1 bundles can lack native rig fields and import as caches. Unexpected ZIP members, duplicate names and archives/arrays over the import size limits are rejected.
 
@@ -38,6 +38,20 @@ Hybrid placement replaces the SAM hip midpoint XYZ and root orientation with GVH
 
 Blender timeline frame `start+i` corresponds to source frame `source_start_frame+i`. The original movie background starts at `start-source_start_frame`. Frame rate uses Blender FPS/FPS-base to preserve fractional rates. Focal estimates are in the processed image; user focal input is scaled from original-video pixels.
 
-The editable armature applies to a captured pre-skin surface cache, preserving original body correctives and facial shape in the unedited result. Manual bone edits do not rerun the learned model. The joined FLAME vertices use head/neck weights; their expression animation remains cached.
+The editable armature applies to a captured pre-skin surface cache, preserving original body correctives and facial shape in the unedited result. Manual bone edits do not rerun the learned model. Version 2 adds four FLAME bones, blends their influence into the original head/neck weights, and subtracts predicted expressions from the pre-skin cache. Animated expression shape keys add them back. This preserves the captured fit while allowing native edits. The joined lower neck has zero facial-edit influence.
 
 Limits: the prototype uses a 2 GiB client download cap and importer expanded-size checks. Long sequences need a different cache/streaming design before relying on this format for arbitrary shot lengths.
+
+## Editable FLAME extension (v2, add-on 0.4.0+)
+
+Old add-ons reject version 2 rather than silently importing an incomplete face. The new importer still accepts legacy version 1. All five arrays below and `manifest.face_editing.version=1` are required and validated before creating objects.
+
+| Array | Shape / meaning |
+| --- | --- |
+| `flame_expression_dirs` | E×H×3 identity-matched expression directions in rig rest space, with neck fade |
+| `flame_expressions` | F×E captured coefficients |
+| `flame_vertex_offset` | scalar integer; H FLAME vertices occupy the end of the joined mesh |
+| `flame_neck_mask` | H correction influences, 0 at the protected lower neck and 1 on the upper face |
+| `flame_bone_quaternions` | F×3×4 captured jaw/left-eye/right-eye local quaternions, WXYZ |
+
+`rig_vertices` in v2 is the residual surface: add expression directions times coefficients before skinning. Blender uses relative, linearly keyed frame residuals and expression keys. `vertices_world` remains the complete unedited captured surface, including when importing without an armature. Captured face controls are also stored in the Blender mesh for the restore-frame operator. The resulting animation evaluates without add-on handlers or model files.

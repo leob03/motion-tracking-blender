@@ -24,8 +24,10 @@ def read_bundle(path):
             if entry.file_size > 2*1024**3:
                 raise ValueError('Bundle member exceeds 2 GiB')
         manifest = json.loads(bundle.read('manifest.json'))
-        if manifest.get('schema') != 'mocap-blender-bundle' or manifest.get('version') != 1:
+        if manifest.get('schema') != 'mocap-blender-bundle' or manifest.get('version') not in (1, 2):
             raise ValueError('Unsupported mocap bundle schema')
+        if manifest['version'] == 2 and not manifest.get('face_editing'):
+            raise ValueError('Version 2 requires editable FLAME metadata')
         animation = io.BytesIO(bundle.read('animation.npz'))
         with zipfile.ZipFile(animation) as contents:
             if sum(entry.file_size for entry in contents.infolist()) > 2*1024**3:
@@ -73,6 +75,30 @@ def read_bundle(path):
             raise ValueError('Invalid skin indices')
         if not np.isfinite(weights).all() or np.any(weights < 0) or np.max(np.abs(weights.sum(1)-1)) > 1e-5:
             raise ValueError('Invalid skin weights')
+    flame_keys = {'flame_expression_dirs', 'flame_expressions', 'flame_vertex_offset', 'flame_neck_mask', 'flame_bone_quaternions'}
+    if flame_keys.intersection(arrays) or manifest.get('face_editing'):
+        if manifest['version'] != 2:
+            raise ValueError('Editable FLAME requires bundle version 2')
+        if not flame_keys.issubset(arrays) or not rig_keys.issubset(arrays):
+            raise ValueError('Incomplete editable FLAME data')
+        if (manifest.get('face_editing') or {}).get('version') != 1:
+            raise ValueError('Unsupported FLAME editing version')
+        dirs = arrays['flame_expression_dirs']
+        if dirs.ndim != 3 or dirs.shape[2] != 3 or not 1 <= dirs.shape[0] <= 100 or not 1 <= dirs.shape[1] <= 10000:
+            raise ValueError('Invalid FLAME expression basis')
+        e, v = dirs.shape[:2]
+        offset = arrays['flame_vertex_offset']
+        if offset.shape != () or offset.dtype.kind not in 'iu' or int(offset) < 0 or int(offset)+v != vertices.shape[1]:
+            raise ValueError('Invalid FLAME vertex range')
+        for key, shape in [('flame_expression_dirs', (e, v, 3)), ('flame_expressions', (n, e)), ('flame_neck_mask', (v,)), ('flame_bone_quaternions', (n, 3, 4))]:
+            if arrays[key].shape != shape or not np.isfinite(arrays[key]).all():
+                raise ValueError('Invalid FLAME array: '+key)
+        if np.any(arrays['flame_neck_mask'] < 0) or np.any(arrays['flame_neck_mask'] > 1):
+            raise ValueError('Invalid FLAME neck mask')
+        if np.max(np.abs(np.linalg.norm(arrays['flame_bone_quaternions'], axis=-1)-1)) > 1e-4:
+            raise ValueError('Invalid FLAME captured rotations')
+        if arrays['rig_names'].tolist()[-4:] != ['FLAME_root', 'FLAME_jaw', 'FLAME_eye.L', 'FLAME_eye.R']:
+            raise ValueError('Missing FLAME bones')
     return manifest, arrays
 
 
@@ -124,21 +150,27 @@ def make_camera(collection, name, matrices, K, width, height, start):
     return obj
 
 
-def mesh_cache(collection, name, vertices, faces, start):
+def mesh_cache(collection, name, vertices, faces, start, relative=False):
     mesh = bpy.data.meshes.new(name)
     mesh.from_pydata(vertices[0].tolist(), [], faces.tolist())
     mesh.update()
     obj = bpy.data.objects.new(name, mesh)
     collection.objects.link(obj)
     obj.shape_key_add(name='Frame_0')
-    mesh.shape_keys.use_relative = False
+    mesh.shape_keys.use_relative = relative
     for i in range(1, len(vertices)):
         key = obj.shape_key_add(name=f'Frame_{i}')
         key.data.foreach_set('co', vertices[i].astype(np.float32).ravel())
     for i, key in enumerate(mesh.shape_keys.key_blocks):
         key.interpolation = 'KEY_LINEAR'
-        mesh.shape_keys.eval_time = key.frame
-        mesh.shape_keys.keyframe_insert('eval_time', frame=start+i)
+        if relative:
+            if i:
+                for frame, value in [(start, 0.), (start+i-1, 0.), (start+i, 1.)]+([(start+i+1, 0.)] if i < len(vertices)-1 else []):
+                    key.value = value
+                    key.keyframe_insert('value', frame=frame, group='Captured surface residual')
+        else:
+            mesh.shape_keys.eval_time = key.frame
+            mesh.shape_keys.keyframe_insert('eval_time', frame=start+i)
     linear(mesh.shape_keys)
     for polygon in mesh.polygons:
         polygon.use_smooth = True
@@ -205,9 +237,14 @@ def import_bundle(path, start=1001, include_mesh=True, video='', scene=None, cam
         arm = create_armature(children['actor'], shot+' · '+manifest['track_id']+' · Rig', arrays, Y_UP_TO_Z_UP, start)
     if include_mesh:
         vertices = arrays['rig_vertices'] if arm else arrays['vertices_world']
-        mesh = mesh_cache(children['actor'], shot+' · Body', vertices @ Y_UP_TO_Z_UP.T, arrays['faces'], start)
+        editable_face = arm is not None and 'flame_expressions' in arrays
+        mesh = mesh_cache(children['actor'], shot+' · Body', vertices @ Y_UP_TO_Z_UP.T, arrays['faces'], start, relative=editable_face)
         if arm:
             bind_mesh(mesh, arm, arrays)
+        if editable_face:
+            from .face import add_expression_keys
+            add_expression_keys(mesh, arm, arrays, Y_UP_TO_Z_UP, start)
+    collection['editable_face'] = bool(include_mesh and arm is not None and 'flame_expressions' in arrays)
     collection['editable_rig'] = arm is not None
     collection['rig_note'] = 'Native bones with captured surface correctives' if arm else 'Cache only; submit a new job to obtain native bones' if include_rig else 'Rig import disabled'
     scene.frame_set(start)

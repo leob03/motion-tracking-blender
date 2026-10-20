@@ -14,6 +14,8 @@ This snapshot preserves the functioning Blender adapter and current ComfyUI tran
 | `production_bridge/comfy_nodes/` | Queued job node, subprocess lifecycle, progress/log route, output checksum |
 | `production_bridge/worker.py` | Detection/tracking, sequential backends, world/root fusion, portable export |
 | `production_bridge/face_worker.py` | Optional RealDenseFace fit and FLAME attachment |
+| `production_bridge/flame_export.py` | Native facial bones, expression basis and residual-surface export |
+| `mocap_comfy/face.py` | Expression shape keys, facial editing and restore-frame UI |
 
 `client.py` has no Blender imports, but importing the **package** executes its Blender-dependent `__init__.py`. A non-Blender adapter must load this module directly or agree a package extraction. Bundle validation currently lives in the Blender-dependent importer; it has not been split into a DCC-neutral library.
 
@@ -54,6 +56,8 @@ Keep Blender responsive, modify scene data only on its main thread, preserve job
 3. A dedicated reproducible worker environment/container, rebuilt CUDA extensions, and offline model staging via DVC.
 4. Production authentication, job ownership, retention and source identity. The current node adds no per-user authorization; upload/background media have no source-SHA binding. A bundle checksum only verifies downloaded result bytes.
 5. Windows testing, long-shot memory/cache size, reliable error/reconnect UX, and then production shot lookup / interactive actor selection.
-6. Editable FLAME expression/jaw/eye controls, after preserving this baseline.
+6. FLAME 0.4.0 controls are implemented; agree on any further semantic/FACS controls separately.
 
 These are identified next steps, not implemented changes or a production-readiness claim. No messages were sent to coworkers automatically.
+
+Editable FLAME output uses bundle version 2 and requires artist add-on 0.4.0+. Update the worker and artist package together. Existing body/SAM-native results remain version 1. No new HTTP routes or model downloads are required.

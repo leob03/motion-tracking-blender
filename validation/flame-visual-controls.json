@@ -1,0 +1,50 @@
+{
+  "hand_signs": {
+    "tested_frames": [
+      1001,
+      1004
+    ],
+    "expression_handles": 10,
+    "max_target_error_m": 2.900849519064558e-05,
+    "max_skinning_derivative_error_m": 1.918838273114122e-06,
+    "max_body_change_m": 0.0,
+    "max_protected_collar_change_m": 0.0,
+    "max_far_region_rms_m": 0.00020449901306424293,
+    "max_solver_setup_seconds": 0.23230804800186888,
+    "native_reload_without_addon_max_m": 7.450580596923828e-09
+  },
+  "retained_capture": {
+    "tested_frames": [
+      1001,
+      1004
+    ],
+    "expression_handles": 10,
+    "max_target_error_m": 2.8456560486268315e-05,
+    "max_skinning_derivative_error_m": 1.7844279992587642e-06,
+    "max_body_change_m": 0.0,
+    "max_protected_collar_change_m": 0.0,
+    "max_far_region_rms_m": 0.00020440023524889418,
+    "max_solver_setup_seconds": 0.2380618899987894,
+    "native_reload_without_addon_max_m": 3.725290298461914e-09
+  },
+  "graphical_blender_4_4": {
+    "mouse_drag_expression_change": 1.479458749294281,
+    "auto_key_scrub_error": 5.960464477539063e-08,
+    "undo_error": 0.0,
+    "escape_cancel_error": 0.0,
+    "jaw_drag_radians": 0.07999707013368607,
+    "eye_drag_radians": 0.07595702260732651,
+    "previous_view_button": [
+      "FINISHED"
+    ]
+  },
+  "scope": "Small-correction integration checks, not ground-truth tracking accuracy or arbitrary facial sculpting. Windows not tested.",
+  "installed_addon_smoke": {
+    "version": "0.5.0",
+    "demo_loaded": true,
+    "handles": 13,
+    "enable_disable_reenable": true,
+    "all_six_sections_default_closed": true,
+    "advanced_options_default_closed": true
+  }
+}

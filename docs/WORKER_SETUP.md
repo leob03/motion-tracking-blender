@@ -123,3 +123,7 @@ python production_bridge/tests/run_api_job.py   --endpoint http://127.0.0.1:8188
 Then run hybrid with face off, hybrid with SAM native face, and hybrid with RealDenseFace if that feature is deployed. Import each downloaded bundle in Blender. Check video alignment, visible cameras, pose edits, logs, cancellation and resume. The CLI test requires no Blender imports or model dependencies on the submitting machine.
 
 The tested fork must accept movie upload through `/upload/image`, expose standard prompt/queue/history/view routes, and implement **job-scoped** `POST /api/jobs/{id}/cancel`. `/mocap/status/{id}` is supplied by this node. No core fork modifications were made here. Production auth, proxy limits and user/job ownership need coordination with the shared bridge team.
+
+## FLAME editing update (0.4.0)
+
+Deploy `production_bridge/flame_export.py` alongside the updated `worker.py`, and update the artist add-on to 0.4.0. The existing RealDenseFace/FLAME model assets and Python environment are reused. Each facial export verifies its model replay against the retained fit. New editable facial results use bundle v2; an older artist add-on will reject them. Non-FLAME jobs still use v1. See [editing and retained-capture upgrades](FLAME_EDITING.md).

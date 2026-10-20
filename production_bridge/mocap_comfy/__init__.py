@@ -1,5 +1,5 @@
 bl_info = {
-    'name': 'Mocap ComfyUI', 'author': 'Innovation', 'version': (0, 3, 1),
+    'name': 'Mocap ComfyUI', 'author': 'Innovation', 'version': (0, 5, 0),
     'blender': (4, 2, 0), 'location': '3D View > Sidebar > Mocap',
     'description': 'Submit footage to ComfyUI and import editable body rigs, mesh, and cameras',
     'category': 'Animation',
@@ -19,6 +19,8 @@ from bpy.types import Operator, Panel, PropertyGroup
 from .client import ComfyClient
 from .importer import import_bundle, result_collection
 from .log_view import MOCAP_OT_live_log, MOCAP_OT_close_log, draw_log_header, find_log_area, refresh_log_views
+from .face import CLASSES as FACE_CLASSES
+from .face_controls import CLASSES as VISUAL_CLASSES, register_visuals, unregister_visuals, stop_drag
 
 _run = None
 
@@ -26,6 +28,12 @@ _run = None
 def method_changed(settings, context):
     if settings.method == 'gvhmr':
         settings.face_capture = 'none'
+
+
+def face_visual_changed(settings, context):
+    if settings.face_visual and context.area and context.area.type == 'VIEW_3D':
+        context.space_data.show_gizmo = True
+        context.space_data.show_gizmo_context = True
 
 
 class MocapSettings(PropertyGroup):
@@ -64,6 +72,10 @@ class MocapSettings(PropertyGroup):
     last_log_line: StringProperty()
     activity_detail: StringProperty()
     rig_note: StringProperty()
+    face_visual: BoolProperty(name='Show Visual Face Controls', default=False, update=face_visual_changed, description='Drag the colored handles in the viewport to correct this face')
+    face_auto_key: BoolProperty(name='Key on release', default=True, description='Key facial corrections when a drag finishes; Ctrl Z undoes the drag')
+    face_labels: BoolProperty(name='Control labels', default=True)
+    face_advanced: BoolProperty(name='Advanced expression sliders', default=False)
 
 
 def begin_job(scene, resume=False):
@@ -324,6 +336,9 @@ class MOCAP_OT_pose_rig(Operator):
         arm.hide_set(False)
         arm.select_set(True)
         context.view_layer.objects.active = arm
+        for name in ('Body', 'Hands'):
+            if name in arm.data.collections:
+                arm.data.collections[name].is_visible = True
         bpy.ops.object.mode_set(mode='POSE')
         return {'FINISHED'}
 
@@ -354,6 +369,7 @@ class MocapChildPanel:
     bl_region_type = 'UI'
     bl_category = 'Mocap'
     bl_parent_id = 'MOCAP_PT_comfy'
+    bl_options = {'DEFAULT_CLOSED'}
 
 
 class MOCAP_PT_footage(MocapChildPanel, Panel):
@@ -404,9 +420,9 @@ class MOCAP_PT_import(MocapChildPanel, Panel):
 
 
 class MOCAP_PT_job(MocapChildPanel, Panel):
-    bl_label = '4. Progress and logs'
+    bl_label = '5. Progress and logs'
     bl_idname = 'MOCAP_PT_job'
-    bl_order = 3
+    bl_order = 4
     def draw(self, context):
         layout, s = self.layout, context.scene.mocap_comfy
         if s.elapsed_detail:
@@ -431,9 +447,9 @@ class MOCAP_PT_job(MocapChildPanel, Panel):
 
 
 class MOCAP_PT_bundle(MocapChildPanel, Panel):
-    bl_label = '5. Saved results'
+    bl_label = '6. Saved results'
     bl_idname = 'MOCAP_PT_bundle'
-    bl_order = 4
+    bl_order = 5
     bl_options = {'DEFAULT_CLOSED'}
     def draw(self, context):
         self.layout.prop(context.scene.mocap_comfy, 'bundle')
@@ -442,6 +458,7 @@ class MOCAP_PT_bundle(MocapChildPanel, Panel):
 
 @persistent
 def stop_monitoring(_):
+    stop_drag()
     global _run
     if _run is not None:
         _run['stop'].set()
@@ -450,7 +467,7 @@ def stop_monitoring(_):
         bpy.app.timers.unregister(poll_events)
 
 
-CLASSES = (MocapSettings, MOCAP_OT_submit, MOCAP_OT_resume, MOCAP_OT_cancel, MOCAP_OT_import, MOCAP_OT_review_camera, MOCAP_OT_pose_rig, MOCAP_OT_live_log, MOCAP_OT_close_log, MOCAP_PT_panel, MOCAP_PT_footage, MOCAP_PT_process, MOCAP_PT_import, MOCAP_PT_job, MOCAP_PT_bundle)
+CLASSES = (MocapSettings, MOCAP_OT_submit, MOCAP_OT_resume, MOCAP_OT_cancel, MOCAP_OT_import, MOCAP_OT_review_camera, MOCAP_OT_pose_rig, MOCAP_OT_live_log, MOCAP_OT_close_log, MOCAP_PT_panel, MOCAP_PT_footage, MOCAP_PT_process, MOCAP_PT_import, MOCAP_PT_job, MOCAP_PT_bundle)+FACE_CLASSES+VISUAL_CLASSES
 
 
 def register():
@@ -459,9 +476,11 @@ def register():
     bpy.types.Scene.mocap_comfy = PointerProperty(type=MocapSettings)
     bpy.app.handlers.load_pre.append(stop_monitoring)
     bpy.types.TEXT_HT_header.prepend(draw_log_header)
+    register_visuals()
 
 
 def unregister():
+    unregister_visuals()
     stop_monitoring(None)
     bpy.types.TEXT_HT_header.remove(draw_log_header)
     bpy.app.handlers.load_pre.remove(stop_monitoring)

@@ -28,14 +28,16 @@ def create_armature(collection, name, arrays, axis, start):
         children = [k for k in range(len(names)) if parents[k] == j and np.linalg.norm(positions[k]-positions[j]) > .005]
         children.sort(key=lambda k: ('proc' in names[k] or 'null' in names[k], k))
         direction = positions[children[0]]-positions[j] if children else np.array([0., 0., .05])
-        length = np.clip(np.linalg.norm(direction), .018, .35)
+        if bone_name.startswith('FLAME_'):
+            direction = axis@rest[j, :3, 1]
+        length = .025 if bone_name.startswith('FLAME_') else np.clip(np.linalg.norm(direction), .018, .35)
         bone.tail = positions[j]+direction/np.linalg.norm(direction)*length
         bone.align_roll(Vector((axis@rest[j, :3, 2]).tolist()))
         if parents[j] >= 0:
             bone.parent = data.edit_bones[names[int(parents[j])]]
         bone.use_connect = False
     bpy.ops.object.mode_set(mode='OBJECT')
-    groups = {name: data.collections.new(name) for name in ('Body', 'Hands', 'Face', 'Helpers')}
+    groups = {name: data.collections.new(name) for name in ('Body', 'Hands', 'Face', 'Helpers', 'FLAME face')}
     groups['Helpers'].is_visible = False
     groups['Face'].is_visible = False
     for bone in data.bones:
@@ -43,6 +45,8 @@ def create_armature(collection, name, arrays, axis, start):
         group = ('Helpers' if 'proc' in lower or 'null' in lower else
                  'Hands' if any(part in lower for part in ('thumb', 'index', 'middle', 'ring', 'pinky', 'palm')) else
                  'Face' if any(part in lower for part in ('jaw', 'teeth', 'tongue', 'eye')) else 'Body')
+        if bone.name.startswith('FLAME_'):
+            group = 'Helpers' if bone.name == 'FLAME_root' else 'FLAME face'
         groups[group].assign(bone)
         bone['native_joint_index'] = names.index(bone.name)
     blender_rest = np.stack([np.array(data.bones[n].matrix_local) for n in names])
@@ -60,6 +64,9 @@ def create_armature(collection, name, arrays, axis, start):
                 rotation.negate()
             last[bone_name] = rotation.copy()
             pb.rotation_mode = 'QUATERNION'
+            if bone_name.startswith('FLAME_'):
+                pb.lock_location = (True, True, True)
+                pb.lock_scale = (True, True, True)
             pb.location, pb.rotation_quaternion, pb.scale = location, rotation, scale
             for prop in ('location', 'rotation_quaternion', 'scale'):
                 pb.keyframe_insert(prop, frame=start+frame, group=bone_name)
