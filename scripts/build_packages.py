@@ -12,7 +12,7 @@ info = next(ast.literal_eval(node.value) for node in ast.parse(source.read_text(
 version = '.'.join(map(str, info['version']))
 out = ROOT/'dist'
 out.mkdir(exist_ok=True)
-artist = ['__init__.py', 'client.py', 'importer.py', 'rig.py', 'log_view.py']
+artist = ['__init__.py', 'client.py', 'importer.py', 'rig.py', 'log_view.py', 'face.py']
 snapshot = json.loads((ROOT/'provenance/source-snapshot.json').read_text())
 worker = [row['path'] for row in snapshot['files'] if '/tests/' not in row['path'] and '/mocap_comfy/' not in row['path'] and not row['path'].endswith('package_addon.py')]
 

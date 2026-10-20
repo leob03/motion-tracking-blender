@@ -1,6 +1,6 @@
 # Development and release
 
-The initial repository commit is a source-only snapshot of Blender add-on 0.3.1 and the reviewed worker. [source-snapshot.json](../provenance/source-snapshot.json) checks the exact copied runtime/helper files. Original developer services, installed add-ons and study outputs were not replaced during packaging.
+The initial repository commit is a source-only snapshot of Blender add-on 0.3.1 and the reviewed worker. [source-snapshot.json](../provenance/source-snapshot.json) checks the current runtime/helper files; the original snapshot remains at tag `v0.3.1`. Original developer services, installed add-ons and study outputs were not replaced during packaging.
 
 ## Build and inspect
 
@@ -35,7 +35,7 @@ For a worker smoke test, use `production_bridge/tests/run_api_job.py` with expli
 
 Use a feature branch and update only the relevant layer. Keep Blender operations on its main thread. Preserve job-specific cancellation, checksum validation, frame mapping, body/world coordinate conventions and native rig correctness. Do not silently change inference/model revisions while changing UI.
 
-This baseline's source-hash check must be deliberately refreshed when runtime source changes; it is not a requirement to keep code frozen forever. Update the version, source manifest, package contents and validation notes together. Runtime and bridge/portability changes need discussion with the project owner before implementation. The proposed facial-control feature has not been started in this snapshot.
+This baseline's source-hash check must be deliberately refreshed when runtime source changes; it is not a requirement to keep code frozen forever. Update the version, source manifest, package contents and validation notes together. Runtime and bridge/portability changes need discussion with the project owner before implementation. The owner-authorized FLAME editing feature is implemented in 0.4.0; see `FLAME_EDITING.md` for its validation commands.
 
 For deployment, the engine team mirrors/pins this repository and the reviewed external sources, stages assets via DVC, rebuilds the dedicated environment and validates the chosen feature modes. The current development services still reference their original source paths; changing their deployment pin or paths is a separate reviewed step.
 

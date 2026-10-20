@@ -2,7 +2,7 @@
 
 ## Install
 
-Download `mocap_comfy-0.3.1.zip` from the [0.3.1 prototype release](https://github.com/leob03/motion-tracking-blender/releases/tag/v0.3.1), or build it with `python scripts/build_packages.py` (output in `dist/`). Install the ZIP through **Edit → Preferences → Add-ons → Install from Disk**. Enable **Mocap ComfyUI**. Blender 4.4.0 on Linux is the current tested version; the add-on declares 4.2+ support. Windows compatibility is intended but has not been exercised here.
+Build `mocap_comfy-0.4.0.zip` with `python scripts/build_packages.py` (output in `dist/`). Install it through **Edit → Preferences → Add-ons → Install from Disk**, enable **Mocap ComfyUI**, then restart Blender. Blender 4.4.0 on Linux is tested; Windows remains unvalidated.
 
 Open the 3D View sidebar with **N**, then **Mocap**. Enter the worker's ComfyUI URL. For a local worker use `http://127.0.0.1:8188`. A remote worker can use the team's approved HTTP(S) endpoint or an SSH tunnel:
 
@@ -20,7 +20,7 @@ Use `http://127.0.0.1:8188` in Blender on the tunnel's client machine. The video
 4. Choose moving/static camera, timeline start, mesh and armature import. Default Blender start is 1001; **Video fit** is the default review camera.
 5. Press **Submit to ComfyUI**. Networking runs in a background thread; scene import runs on Blender's main thread. Models run sequentially on the worker.
 
-The five numbered sections collapse independently. **Progress and logs** shows available stage/frame counts, elapsed time, last worker activity and approximate remaining time. **Open Live Log** splits the viewport and places a Text Editor on its right. **Close Log** in its header or the Mocap sidebar closes the pane. Repeated opens reuse it. Restore a maximized viewport with Ctrl Space first. Full received logs are saved alongside downloads; the visible text retains the last 100,000 characters.
+The six numbered sections collapse independently. **Progress and logs** shows available stage/frame counts, elapsed time, last worker activity and approximate remaining time. **Open Live Log** splits the viewport and places a Text Editor on its right. **Close Log** in its header or the Mocap sidebar closes the pane. Repeated opens reuse it. Restore a maximized viewport with Ctrl Space first. Full received logs are saved alongside downloads; the visible text retains the last 100,000 characters.
 
 **Cancel This Job** requires the fork's job-specific cancellation route. **Resume Job** reconnects using a saved prompt ID; it does not submit a duplicate. A server restart may remove queue/history, so retain downloaded results. **Import Downloaded Bundle** imports an existing `.mocap.zip` without inference.
 
@@ -33,6 +33,6 @@ New imports create a `Mocap | shot | actor` collection containing **01 Character
 
 Press numpad 0 to review the movie background. Click **Edit Body / Finger Bones**, adjust bones in Pose Mode, then insert transform keys or use Auto Keying. Capture is keyed on every frame: unkeyed edits disappear when scrubbing. The rig is FK, without animator IK controls. The unedited fitted surface is preserved through a cache before skinning; learned correctives are not recomputed for large manual pose changes.
 
-Hybrid rigs have 127 MHR bones; GVHMR rigs have 55 SMPL-X bones. GVHMR does not predict finger motion. FLAME head/neck placement follows the body rig, but expression/jaw/eye motion is currently baked into the facial surface. Facial editing controls are future work.
+Hybrid rigs have 127 MHR bones, or 131 with editable FLAME; GVHMR rigs have 55 SMPL-X bones. GVHMR does not predict finger motion. For RealDenseFace + FLAME, open **6. Face corrections** to edit expression shape keys and jaw/eye bones, key corrections, or restore a captured frame. See [facial editing](FLAME_EDITING.md). SAM-native facial animation remains cached.
 
 Frame-count defaults apply to new settings. Saved scenes retain their stored values. Reimport old downloaded bundles to obtain the new names/organization; bundles predating native rig export remain cache-only.

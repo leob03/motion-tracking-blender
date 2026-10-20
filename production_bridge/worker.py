@@ -121,7 +121,7 @@ def read_npz(path):
         return {key: data[key] for key in data.files}
 
 
-def export_bundle(root, meta, options, destination, timings=None, started=None):
+def export_bundle(root, meta, options, destination, timings=None, started=None, study=None):
     from build_root_orientation import root_rotation
     status(root, 'Building portable Blender bundle')
     export_start = time.perf_counter()
@@ -166,19 +166,29 @@ def export_bundle(root, meta, options, destination, timings=None, started=None):
     jc = np.einsum('fji,fvj->fvi', R, arrays['joints_world']-t[:, None])
     p = np.einsum('fij,fvj->fvi', arrays['K'], jc)
     arrays['joints_projected_pixels'] = p[..., :2]/p[..., 2:3]
-    rig_error = preserve_fitted_surface(rig, arrays['vertices_world'],
-                lambda done, total: report('export', 'Preserving fitted surface for editable bones', done, total, frames=count))
+    face_editing = None
+    if options.get('face_capture') == 'realdenseface_flame':
+        from flame_export import add_flame_controls
+        if study is None:
+            raise ValueError('The FLAME editing export requires the study model path')
+        report('export', 'Building editable FLAME expressions, jaw and eyes')
+        face_editing = add_flame_controls(arrays, rig, read_npz(base/'face/parameters.npz'), study)
+        rig_error = face_editing['surface_reconstruction_error_m']
+    else:
+        rig_error = preserve_fitted_surface(rig, arrays['vertices_world'],
+                    lambda done, total: report('export', 'Preserving fitted surface for editable bones', done, total, frames=count))
     arrays.update(rig)
     arrays_path = root / 'animation.npz'
     np.savez_compressed(arrays_path, **arrays)
-    manifest = dict(schema='mocap-blender-bundle', version=1, method=options['method'],
+    manifest = dict(schema='mocap-blender-bundle', version=2 if face_editing else 1, method=options['method'],
                     frames=count, fps=meta['fps'], width=meta['width'], height=meta['height'],
                     source_start_frame=meta['start_frame'], track_id=meta['track_id'],
                     coordinates='right-handed Y-up world; meters; camera extrinsics map OpenCV camera to world',
                     joint_names=gv['joint_names'].tolist(), animation='animation.npz', source=meta['source'],
                     intrinsics_source=meta['intrinsics_source'], options=options,
                     camera_note='GVHMR inferred camera, not calibrated environment matchmove. Hybrid actor-fit camera preserves only this actor projection; it is not a shared scene camera.',
-                    body_note='Native animated armature with skin weights and per-frame pre-skin surface cache; body/finger bones are editable. Facial surface remains cached.',
+                    body_note='Native animated armature with skin weights and retained surface residuals. FLAME results include expression keys and jaw/eye bones.' if face_editing else 'Native body/finger rig with captured surface correctives; facial surface remains cached.',
+                    face_editing=face_editing,
                     rig=dict(type='MHR' if options['method']=='hybrid' else 'SMPL-X', bones=len(rig['rig_names']),
                              surface_reconstruction_error_m=rig_error,
                              note='Learned surface/face correctives are retained at captured frames, not recomputed for edited poses.'),
@@ -246,7 +256,7 @@ def main():
         face_env = dict(inference_env, PYTORCH_ALLOC_CONF='backend:native', PYTORCH_CUDA_ALLOC_CONF='backend:native')
         subprocess.run([sys.executable, '-u', str(Path(__file__).with_name('face_worker.py')), '--study', str(args.study), '--job-root', str(args.job_root)], check=True, env=face_env)
         timings['face_seconds'] = time.perf_counter()-stage_start
-    export_bundle(args.job_root, meta, options, args.output, timings, started)
+    export_bundle(args.job_root, meta, options, args.output, timings, started, study=args.study)
 
 
 if __name__ == '__main__':

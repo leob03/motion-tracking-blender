@@ -30,6 +30,16 @@ Synthetic geometry/import, malformed bundle/rig rejection, package composition a
 - Integration with the team's generic DCC bridge or Maya.
 - Arbitrary long shots, memory budgets, cache streaming or results above the 2 GiB client cap.
 - Shared-world consistency across independently processed actors, camera calibration/ground truth, severe occlusion robustness.
-- Editable FLAME expression/jaw/eye controls; current facial animation is cached.
+- Semantic FACS/ARKit facial controls and large facial edits/collision handling. Native FLAME PCA/jaw/eye corrections are validated below.
 
 The measured 137-frame development job took about 269 seconds with hybrid body/hands and face disabled, including startup/preparation/export. This is one workstation result, not a production SLA. The process is sequential and currently reloads workers/models for each job.
+
+## FLAME editing 0.4.0
+
+A retained 12-frame RealDenseFace capture was upgraded without rerunning inference. Its canonical FLAME model replay differed from the original CUDA solver by at most 3.22e-7 m. All 12 unedited Blender frames were checked (maximum 1.79e-6 m). Expression 001 and 8-degree jaw/left-eye/right-eye corrections at first/middle/last frames agreed with an independent CPU skinning reference within 4.00e-7 m. Protected neck and body changes were exactly zero in these checks.
+
+Key/restore, malformed facial bundle rejection before scene changes, and save/reopen with the add-on unregistered passed; reloaded corrected geometry was unchanged. These are deformation-transfer checks, not facial tracking accuracy or aesthetic-quality measurements. The reviewed fitter has pose blendshapes disabled; editing matches that convention.
+
+A fresh eight-frame hand-signs job also completed through the local ComfyUI API (about 139 seconds including body, hands, face and export). All eight imported frames passed; facial edits agreed with the independent reference within 3.82e-7 m. A manual MHR head rotation carried the FLAME face within 5.58e-7 m. The body and protected lower neck remained unchanged under facial-only edits. See [measured results](../validation/flame-editing.json).
+
+The final export was rebuilt from the retained predictions to align facial/body rest frames and smooth the collar transition. The tested neck-transition triangles did not invert (minimum normal cosine above 0.992 on both captures). Legacy GVHMR-only geometry/reprojection and malformed bundle checks also passed.

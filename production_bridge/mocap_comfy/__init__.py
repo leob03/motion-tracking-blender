@@ -1,5 +1,5 @@
 bl_info = {
-    'name': 'Mocap ComfyUI', 'author': 'Innovation', 'version': (0, 3, 1),
+    'name': 'Mocap ComfyUI', 'author': 'Innovation', 'version': (0, 4, 0),
     'blender': (4, 2, 0), 'location': '3D View > Sidebar > Mocap',
     'description': 'Submit footage to ComfyUI and import editable body rigs, mesh, and cameras',
     'category': 'Animation',
@@ -19,6 +19,7 @@ from bpy.types import Operator, Panel, PropertyGroup
 from .client import ComfyClient
 from .importer import import_bundle, result_collection
 from .log_view import MOCAP_OT_live_log, MOCAP_OT_close_log, draw_log_header, find_log_area, refresh_log_views
+from .face import CLASSES as FACE_CLASSES
 
 _run = None
 
@@ -324,6 +325,9 @@ class MOCAP_OT_pose_rig(Operator):
         arm.hide_set(False)
         arm.select_set(True)
         context.view_layer.objects.active = arm
+        for name in ('Body', 'Hands'):
+            if name in arm.data.collections:
+                arm.data.collections[name].is_visible = True
         bpy.ops.object.mode_set(mode='POSE')
         return {'FINISHED'}
 
@@ -450,7 +454,7 @@ def stop_monitoring(_):
         bpy.app.timers.unregister(poll_events)
 
 
-CLASSES = (MocapSettings, MOCAP_OT_submit, MOCAP_OT_resume, MOCAP_OT_cancel, MOCAP_OT_import, MOCAP_OT_review_camera, MOCAP_OT_pose_rig, MOCAP_OT_live_log, MOCAP_OT_close_log, MOCAP_PT_panel, MOCAP_PT_footage, MOCAP_PT_process, MOCAP_PT_import, MOCAP_PT_job, MOCAP_PT_bundle)
+CLASSES = (MocapSettings, MOCAP_OT_submit, MOCAP_OT_resume, MOCAP_OT_cancel, MOCAP_OT_import, MOCAP_OT_review_camera, MOCAP_OT_pose_rig, MOCAP_OT_live_log, MOCAP_OT_close_log, MOCAP_PT_panel, MOCAP_PT_footage, MOCAP_PT_process, MOCAP_PT_import, MOCAP_PT_job, MOCAP_PT_bundle)+FACE_CLASSES
 
 
 def register():

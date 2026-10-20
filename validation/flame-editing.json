@@ -1,0 +1,78 @@
+{
+  "date": "2026-10-20",
+  "addon_version": "0.4.0",
+  "blender": "4.4.0",
+  "bundle_version": 2,
+  "retained_capture": {
+    "frames": 12,
+    "expression_keys": 100,
+    "rig_bones": 131,
+    "max_baseline_error_m": 1.7881393432617188e-06,
+    "max_edit_reference_error_m": 3.9959032299639175e-07,
+    "max_locked_neck_change_m": 0.0,
+    "max_body_change_m": 0.0,
+    "keyed_correction_persists": true,
+    "restore_frame_passed": true,
+    "body_head_edit_follow_error_m": 3.630465086335022e-07,
+    "minimum_neck_transition_normal_cosine": 0.992700457572937,
+    "malformed_face_rejected_before_scene_changes": true,
+    "native_reload_without_addon_max_m": 0.0
+  },
+  "fresh_comfy_api_capture": {
+    "frames": 8,
+    "expression_keys": 100,
+    "rig_bones": 131,
+    "max_baseline_error_m": 1.6689300537109375e-06,
+    "max_edit_reference_error_m": 3.811163403115455e-07,
+    "max_locked_neck_change_m": 0.0,
+    "max_body_change_m": 0.0,
+    "keyed_correction_persists": true,
+    "restore_frame_passed": true,
+    "body_head_edit_follow_error_m": 5.578695556618385e-07,
+    "minimum_neck_transition_normal_cosine": 0.9923785924911499,
+    "malformed_face_rejected_before_scene_changes": true,
+    "native_reload_without_addon_max_m": 0.0
+  },
+  "fresh_worker_timings": {
+    "prepare_seconds": 3.8909389949994875,
+    "gvhmr_seconds": 33.77316168199923,
+    "sam_seconds": 29.343531882000207,
+    "face_seconds": 63.97078524799963,
+    "export_seconds": 1.6364564650002649,
+    "worker_total_seconds": 132.63659473400003
+  },
+  "fresh_export": {
+    "version": 1,
+    "model": "FLAME2023",
+    "expressions": 100,
+    "bones": [
+      "FLAME_jaw",
+      "FLAME_eye.L",
+      "FLAME_eye.R"
+    ],
+    "solver_replay_max_m": 2.776127553116847e-07,
+    "surface_reconstruction_error_m": 6.503932059587214e-08,
+    "protected_neck_vertices": 60,
+    "note": "Native expression shape keys and jaw/eye FK bones. Captured residual surface retained; lower neck corrections fade to zero. RDF pose blendshapes are disabled, matching the reviewed fitter."
+  },
+  "windows_validated": false,
+  "legacy_gvhmr": {
+    "frames": 12,
+    "method": "gvhmr",
+    "markers": 0,
+    "max_mesh_error_m": 7.152557373046875e-07,
+    "max_camera_position_error_m": 4.2505969055639525e-07,
+    "max_camera_reprojection_error_px": 0.00012579021830561032,
+    "preserves_existing_objects": true,
+    "fps": 30.0,
+    "first_frame": 1001,
+    "tested_frames": [
+      0,
+      6,
+      11
+    ]
+  },
+  "final_export_rebuilt_from_retained_predictions": true,
+  "installed_addon_enable_disable_reenable": true,
+  "installed_demo_face_body_selection": true
+}
