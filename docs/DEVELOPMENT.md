@@ -40,3 +40,9 @@ This baseline's source-hash check must be deliberately refreshed when runtime so
 For deployment, the engine team mirrors/pins this repository and the reviewed external sources, stages assets via DVC, rebuilds the dedicated environment and validates the chosen feature modes. The current development services still reference their original source paths; changing their deployment pin or paths is a separate reviewed step.
 
 Use the `leob03` GitHub identity for this repository. Authentication belongs in GitHub CLI/SSH credential storage, never in a committed remote URL, config example, log or token file. Do not commit model weights, capture media, generated bundles, personal configs or developer environment binaries.
+
+## Visual face controls
+
+Run `production_bridge/tests/blender_face_controls.py` in Blender with an editable `.mocap.zip` or the demo `.blend`, followed by an output JSON path. The check covers ten expression handles under head/object transforms, analytic skinning derivatives against actual Blender evaluation, body/collar isolation, pose edits, key/restore and native reload with the add-on disabled.
+
+Also test real mouse interaction in a separate graphical Blender window: drag, auto-key and scrub, Ctrl Z, Esc cancellation, jaw/eye widgets and close-up/previous-view navigation. Headless geometry checks alone do not exercise gizmo picking or modal Undo. The development workstation should run only one test Blender process at a time.

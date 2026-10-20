@@ -1,7 +1,7 @@
 {
   "date": "2026-10-20",
-  "addon_version": "0.4.0",
-  "note": "Current project source hashes including the authorized FLAME editing feature. Original preserved snapshot remains at Git tag v0.3.1; model assets and generated results are excluded.",
+  "addon_version": "0.5.0",
+  "note": "Current source hashes including native FLAME editing and viewport controls. Original preserved snapshot remains at Git tag v0.3.1; model assets and generated results are excluded.",
   "files": [
     {
       "path": "production_bridge/worker.py",
@@ -40,13 +40,13 @@
     },
     {
       "path": "production_bridge/package_addon.py",
-      "sha256": "5255a32a7726dd896743903b8021d34624146e5c026b1a1efa620d039993880a",
-      "bytes": 501
+      "sha256": "98982d5ac3f4c4f45caaee9966a038746c035321a3cd52a76071d548c6051b3d",
+      "bytes": 521
     },
     {
       "path": "production_bridge/mocap_comfy/__init__.py",
-      "sha256": "0e65f499ccb3346c981806ed71dc35072e70012db1512a9e71823d60d72870f0",
-      "bytes": 22473
+      "sha256": "419990a2f02f7beb57d00455e7e19c7486875228afc7724790fbdb52497557b6",
+      "bytes": 23401
     },
     {
       "path": "production_bridge/mocap_comfy/client.py",
@@ -135,8 +135,8 @@
     },
     {
       "path": "production_bridge/mocap_comfy/face.py",
-      "sha256": "33179923daea26f8a2811945165a1ef43f6b56be7feee842a864b295301be8b3",
-      "bytes": 6626
+      "sha256": "a89725fc5448f88d728fb22fd9f51a06888a44929a3de574e64b3cbb43c31575",
+      "bytes": 7613
     },
     {
       "path": "production_bridge/tests/make_flame_reference.py",
@@ -152,6 +152,16 @@
       "path": "scripts/upgrade_flame_bundle.py",
       "sha256": "3baec6d67905ea0e5c1ceb6fc40fcfce96420c5252827602d6e25a6320684973",
       "bytes": 3490
+    },
+    {
+      "path": "production_bridge/mocap_comfy/face_controls.py",
+      "bytes": 19325,
+      "sha256": "b631e0cfdf15a349148824d1e5cb976de39049bea4d39e08f7d0b80fab9c4e65"
+    },
+    {
+      "path": "production_bridge/tests/blender_face_controls.py",
+      "bytes": 5683,
+      "sha256": "255d4f7cd1778611877008ffabedaa52636e7fdbca30c05aed41a9ee56452132"
     }
   ]
 }

@@ -1,13 +1,24 @@
-# Facial corrections in Blender 0.4.0
+# Facial corrections in Blender 0.5.0
 
-Choose **SAM + GVHMR world/root** and **RealDenseFace + FLAME head**, submit, then import with **Mesh** and **Editable armature** enabled. Both worker and artist add-on must be updated to 0.4.0. No additional model download or artist Python dependency is required.
+Choose **SAM + GVHMR world/root** and **RealDenseFace + FLAME head**, submit, then import with **Mesh** and **Editable armature** enabled. Use artist add-on 0.5.0 and the editable-FLAME worker from 0.4.0 or later. Existing editable captures work without re-export or inference. No additional model download or artist Python dependency is required.
 
-Open **Mocap → 6. Face corrections** with the desired character or its review camera selected:
+Open **Mocap → 4. Face corrections** with the desired character or its review camera selected:
 
-1. Scrub to a frame and adjust the signed **Expression** sliders. Pages 0–9 expose the 100 FLAME PCA components. These are the model's mathematical components, not named smile/blink/FACS controls. They also appear as normal shape keys on the body mesh.
-2. Press **Edit Jaw / Eye Bones**. Rotate `FLAME_jaw`, `FLAME_eye.L` or `FLAME_eye.R` in Pose Mode. Their local axes match the fitted FLAME model. Head/neck placement remains on the body rig.
-3. Press **Key Face Corrections** before changing frame. Standard Blender keyframe insertion and Graph Editor workflows also work. Capture is keyed every frame, so an edit at one frame does not automatically spread over neighboring frames.
-4. **Restore Captured Face at This Frame** restores and keys the original expressions/jaw/eyes at that frame, preserving corrections elsewhere. Blender Undo also works for these operators.
+1. Scrub to the frame you want to correct. Press **Face Close-up** to frame the face and show the controls. **Previous View** restores your earlier view and guide visibility. You can also enable **Show Visual Face Controls** directly while looking through the video-fit camera.
+2. Drag a **green** handle on a mouth corner, upper/lower lip, brow, or eyelid. The handle follows the evaluated mesh; its label identifies the region. Left/right refer to the actor. Motion is constrained to the current view plane, so a camera-view drag changes the visible fit without asking you to guess a depth value.
+3. Drag the **orange jaw** handle down to open or up to close. Drag either **purple eye-aim** handle to adjust that eye's gaze. These operate the existing FLAME bones. Eyelid handles change expression, not gaze.
+4. Hold **Shift** for smaller movements. **Esc** or right-click cancels the current drag. **Ctrl Z** undoes a completed drag. **Key on release** is enabled by default, so a completed edit survives scrubbing. With it disabled, press **Key Face Corrections** before changing frames. Capture is keyed every frame: changes affect the edited frame, without an automatic temporal falloff.
+5. **Restore Captured Face at This Frame** restores and keys the original expressions/jaw/eyes at that frame, preserving corrections elsewhere. **Control labels** hides the callouts when you prefer an uncluttered view.
+
+The previous controls remain available under **Advanced expression sliders** and **Edit Jaw / Eye Bones**. The latter switches off the visual handles and shows the native bones in Pose Mode. Pages 0–9 expose the 100 signed FLAME PCA components; they are not named FACS/ARKit controls.
+
+## What the visual handles solve
+
+Expression handles fit a combination of the existing FLAME expression keys to your drag. Other facial landmarks and sampled surface points act as soft anchors, and a penalty discourages large coefficient changes. This is an interactive NumPy solve in Blender; there is no ComfyUI round trip or model inference. Body pose, identity, jaw/eye pose and the protected collar are excluded from the expression solve.
+
+The solver uses the current skinned pose and object transforms, so existing head corrections are respected. Nearby facial regions can still move: a FLAME component affects multiple vertices, and anchors are soft constraints. This is suitable for small corrections, not arbitrary sculpting or perfectly independent FACS actions. A drag is limited to 15 mm at the character's scale and three coefficient units per component; jaw/eye changes are limited to 0.35 radians per drag. There is no collision solve or guarantee of complete eyelid/lip closure.
+
+Visual handles require the standard FLAME2023 5023-vertex head and the original linear armature modifier. Disable additional deformation/topology modifiers when using the solver. Shape keys and bone animation remain native Blender data; only the editing widgets need the add-on. Saved corrections play without it. **Face Close-up** changes viewport framing and guide visibility, not the shot camera or character transform.
 
 Rare coefficients outside Blender's slider range are represented by a displayed scale (for example ×2); the captured motion is not clipped. Facial controls work on the existing joined body mesh. An existing MHR jaw/eye bone is not the new FLAME control: use the dedicated `FLAME face` bone collection.
 

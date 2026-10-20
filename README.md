@@ -2,7 +2,7 @@
 
 Select a local video in Blender, process one actor on a ComfyUI GPU worker, and import an editable body/finger armature, the fitted mesh, cameras, and the original movie background. **Artist machines need Blender and network access; no CUDA, PyTorch or model files.**
 
-Version **0.4.0** adds editable FLAME expressions and jaw/eye bones. The original reviewed handoff remains at tag `v0.3.1`; generic DCC-bridge integration is still pending.
+Version **0.5.0** adds draggable face controls for lips, brows and eyelids, plus jaw/eye widgets, on top of the editable FLAME expressions and bones. The original reviewed handoff remains at tag `v0.3.1`; generic DCC-bridge integration is still pending.
 
 | Mode | Body and world placement | Hands / face |
 | --- | --- | --- |
@@ -28,7 +28,7 @@ Build the current artist add-on and worker packages using ordinary Python 3:
 python scripts/build_packages.py
 ```
 
-Install `dist/mocap_comfy-0.4.0.zip` in Blender. The separate `mocap_worker_snapshot-0.4.0.zip` preserves the worker/helper directory layout; it is **not** a standalone custom-node ZIP. Follow the worker setup guide to install its custom-node symlink.
+Install `dist/mocap_comfy-0.5.0.zip` in Blender. The separate `mocap_worker_snapshot-0.5.0.zip` preserves the worker/helper directory layout; it is **not** a standalone custom-node ZIP. Follow the worker setup guide to install its custom-node symlink.
 
 ## What this repository preserves
 

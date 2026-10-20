@@ -43,3 +43,9 @@ Key/restore, malformed facial bundle rejection before scene changes, and save/re
 A fresh eight-frame hand-signs job also completed through the local ComfyUI API (about 139 seconds including body, hands, face and export). All eight imported frames passed; facial edits agreed with the independent reference within 3.82e-7 m. A manual MHR head rotation carried the FLAME face within 5.58e-7 m. The body and protected lower neck remained unchanged under facial-only edits. See [measured results](../validation/flame-editing.json).
 
 The final export was rebuilt from the retained predictions to align facial/body rest frames and smooth the collar transition. The tested neck-transition triangles did not invert (minimum normal cosine above 0.992 on both captures). Legacy GVHMR-only geometry/reprojection and malformed bundle checks also passed.
+
+## Visual face controls 0.5.0
+
+Ten expression handles were tested at two frames on each of the two retained captures, including an edited head pose and a scaled/rotated character. Requested 3 mm movements were followed within 0.030 mm. Body and protected-collar changes were zero; the largest RMS change at sampled regions more than 45 mm from the handle was 0.205 mm. These anchors are soft, so a control is not perfectly isolated. Solver preparation took at most 0.25 s on the development workstation; subsequent drag updates reuse its small matrix.
+
+Actual mouse tests in graphical Blender 4.4 passed: expression dragging, automatic keying and scrubbing, one-step Ctrl Z, Esc cancellation, jaw open/close, eye aiming and previous-view restoration. Saved corrected meshes replayed with the add-on disabled within 8e-9 m. Full measurements are in [flame-visual-controls.json](../validation/flame-visual-controls.json). This is a local UI/deformation prototype, without an inference rerun or Windows validation.

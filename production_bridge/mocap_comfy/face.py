@@ -30,6 +30,7 @@ def add_expression_keys(mesh, arm, arrays, axis, start):
         for k in fc.keyframe_points:
             k.interpolation = 'LINEAR'
     mesh['flame_capture'] = json.dumps(dict(start=start, expressions=expr.tolist(), scales=scales.tolist(), quaternions=arrays['flame_bone_quaternions'].tolist()))
+    mesh['flame_vertex_offset'] = offset
     mesh['flame_expression_count'] = expr.shape[1]
     mesh['flame_expression_page'] = 0
     mesh.id_properties_ui('flame_expression_page').update(min=0, max=(expr.shape[1]-1)//10)
@@ -71,6 +72,9 @@ class MOCAP_OT_face_pose(Operator):
         arm.hide_set(False); arm.select_set(True)
         context.view_layer.objects.active = arm
         arm.data.collections['FLAME face'].is_visible = True
+        context.scene.mocap_comfy.face_visual = False
+        if context.area and context.area.type == 'VIEW_3D':
+            context.space_data.overlay.show_bones = True
         bpy.ops.object.mode_set(mode='POSE')
         for bone in arm.data.bones:
             bone.select = bone.name == BONES[0]
@@ -111,13 +115,13 @@ class MOCAP_OT_face_restore(Operator):
 
 
 class MOCAP_PT_face(Panel):
-    bl_label = '6. Face corrections'
+    bl_label = '4. Face corrections'
     bl_idname = 'MOCAP_PT_face'
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = 'Mocap'
     bl_parent_id = 'MOCAP_PT_comfy'
-    bl_order = 5
+    bl_order = 3
     bl_options = {'DEFAULT_CLOSED'}
     def draw(self, context):
         layout = self.layout
@@ -126,11 +130,25 @@ class MOCAP_PT_face(Panel):
             layout.label(text='Requires an editable FLAME result')
             layout.label(text='Old captures need a worker re-export')
             return
+        settings = context.scene.mocap_comfy
+        row = layout.row(align=True)
+        row.operator('mocap_comfy.face_focus', icon='VIEWZOOM')
+        row.operator('mocap_comfy.face_previous_view', icon='LOOP_BACK')
+        layout.prop(settings, 'face_visual', toggle=True)
+        if settings.face_visual:
+            row = layout.row(align=True)
+            row.prop(settings, 'face_auto_key')
+            row.prop(settings, 'face_labels')
+            layout.label(text='Drag handles; Shift: precision; Esc: cancel')
+            layout.label(text='Green: expression · Orange: jaw · Purple: eyes')
         layout.operator('mocap_comfy.face_pose', icon='BONE_DATA')
-        layout.label(text='Adjust, then key before changing frame')
+        layout.label(text='Bone/slider edits need a key')
         layout.operator('mocap_comfy.face_key', icon='KEY_HLT')
         layout.operator('mocap_comfy.face_restore', icon='LOOP_BACK')
         layout.separator()
+        layout.prop(settings, 'face_advanced', icon='TRIA_DOWN' if settings.face_advanced else 'TRIA_RIGHT', emboss=False)
+        if not settings.face_advanced:
+            return
         count = int(mesh['flame_expression_count'])
         layout.prop(mesh, '["flame_expression_page"]', text='Expression page (0–9)')
         page = min(max(int(mesh['flame_expression_page']), 0), (count-1)//10)
