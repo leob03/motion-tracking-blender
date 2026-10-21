@@ -9,6 +9,29 @@ from urllib.request import Request, urlopen
 import uuid
 
 
+VIDEO_SUFFIXES = ('.mp4', '.mov', '.mkv', '.avi', '.webm', '.m4v')
+_digests = {}
+
+
+def file_digest(path, on_progress=None):
+    """SHA-256 of a local file, remembered per (path, size, mtime) for this Blender session."""
+    path = Path(path)
+    stat = path.stat()
+    key = (str(path.resolve()), stat.st_size, stat.st_mtime_ns)
+    if key not in _digests:
+        digest = hashlib.sha256()
+        last = 0.
+        with path.open('rb') as source:
+            for block in iter(lambda: source.read(4*1024*1024), b''):
+                digest.update(block)
+                now = time.monotonic()
+                if on_progress and now-last > .5:
+                    on_progress(dict(stage='Checking the plate', done=source.tell(), total=stat.st_size, unit='bytes'))
+                    last = now
+        _digests[key] = digest.hexdigest()
+    return _digests[key]
+
+
 class ComfyClient:
     def __init__(self, endpoint, token=''):
         self.endpoint = endpoint.rstrip('/')
@@ -35,16 +58,38 @@ class ComfyClient:
         info = self.request('/object_info/MocapProcessVideo')
         if 'MocapProcessVideo' not in info:
             raise RuntimeError('This server does not have the MocapProcessVideo custom node')
+        node = info['MocapProcessVideo']['input']
+        self.accepted = set(node.get('required', {})) | set(node.get('optional', {}))
         return info
 
+    def features(self):
+        """Optional server capabilities; older worker nodes lack them."""
+        if not getattr(self, 'accepted', None):
+            self.check()
+        accepted = self.accepted
+        return dict(scene_camera='scene_camera' in accepted, actor_box='actor_box' in accepted, warm_models='warm_models' in accepted,
+                    face_capture='face_capture' in accepted)
+
     def upload(self, video, on_progress=None):
+        """Upload once per content: the worker keeps <sha256>.<ext> and later jobs reuse it."""
         path = Path(video)
-        if path.suffix.lower() not in ('.mp4', '.mov', '.mkv', '.avi', '.webm', '.m4v'):
+        suffix = path.suffix.lower()
+        if suffix not in VIDEO_SUFFIXES+('.zip', '.json'):
             raise ValueError('Choose an MP4, MOV, MKV, AVI, WebM, or M4V video')
+        filename = file_digest(path, on_progress)+suffix
+        try:
+            known = self.request('/mocap/upload/'+filename, timeout=15)
+        except RuntimeError:
+            known = {}  # Older node without the reuse route: always upload under a fresh name.
+            filename = uuid.uuid4().hex+suffix
+        if known.get('exists') and known.get('size') == path.stat().st_size:
+            if on_progress:
+                on_progress(dict(stage='Plate already on the worker', done=1, total=1, unit='bytes'))
+            return 'mocap/'+filename
         boundary = 'mocap-'+uuid.uuid4().hex
-        filename = uuid.uuid4().hex+path.suffix.lower()
         prefix = (f'--{boundary}\r\nContent-Disposition: form-data; name="type"\r\n\r\ninput\r\n'
                   f'--{boundary}\r\nContent-Disposition: form-data; name="subfolder"\r\n\r\nmocap\r\n'
+                  f'--{boundary}\r\nContent-Disposition: form-data; name="overwrite"\r\n\r\ntrue\r\n'
                   f'--{boundary}\r\nContent-Disposition: form-data; name="image"; filename="{filename}"\r\n'
                   'Content-Type: application/octet-stream\r\n\r\n').encode()
         suffix = f'\r\n--{boundary}--\r\n'.encode()
@@ -65,9 +110,19 @@ class ComfyClient:
                 result = json.load(response)
         return '/'.join(x for x in (result.get('subfolder', ''), result['name']) if x)
 
+    def detect(self, uploaded_video, frame, max_side, fps_override=0.):
+        """Numbered person boxes on one frame (no inference queue)."""
+        return self.request('/mocap/detect', dict(video=uploaded_video.split('/', 1)[-1], frame=frame, max_side=max_side, fps_override=fps_override), timeout=320)
+
     def submit(self, uploaded_video, options):
         self.progress_id = uuid.uuid4().hex
         self.log_offset = 0
+        accepted = getattr(self, 'accepted', None)
+        if accepted:
+            unsupported = [key for key, value in options.items() if key not in accepted and value not in ('', None, False)]
+            if unsupported:
+                raise RuntimeError('The worker node is older than this add-on and lacks: '+', '.join(unsupported)+'. Restart or update the worker.')
+            options = {key: value for key, value in options.items() if key in accepted}
         graph = {'1': {'class_type': 'MocapProcessVideo', 'inputs': dict(options, video=uploaded_video, progress_id=self.progress_id)}}
         response = self.request('/prompt', {'prompt': graph, 'client_id': uuid.uuid4().hex})
         if response.get('node_errors'):

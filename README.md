@@ -2,7 +2,7 @@
 
 Select a local video in Blender, process one actor on a ComfyUI GPU worker, and import an editable body/finger armature, the fitted mesh, cameras, and the original movie background. **Artist machines need Blender and network access; no CUDA, PyTorch or model files.**
 
-Version **0.5.0** adds draggable face controls for lips, brows and eyelids, plus jaw/eye widgets, on top of the editable FLAME expressions and bones. The original reviewed handoff remains at tag `v0.3.1`; generic DCC-bridge integration is still pending.
+Version **0.6.0** reworks the workflow: image-sequence (EXR/DPX/TIFF/PNG) plates with OCIO-tone-mapped upload proxies, one-time uploads, an actor preview (**Detect Actors**), presets, a job list for queuing several actors, and **Export to Nuke**. A **solved scene camera** (for example from the ViPE Remote Tracking add-on) can drive the job: GVHMR uses its rotations and the body is placed in that camera's world with a depth-preserving plate lock. On the worker, a near-lossless intermediate video, GPU actor detection, a focal-length fix for camera odometry and optional warm models shorten jobs. The 0.5.0 face controls are unchanged. The original reviewed handoff remains at tag `v0.3.1`.
 
 | Mode | Body and world placement | Hands / face |
 | --- | --- | --- |
@@ -28,7 +28,7 @@ Build the current artist add-on and worker packages using ordinary Python 3:
 python scripts/build_packages.py
 ```
 
-Install `dist/mocap_comfy-0.5.0.zip` in Blender. The separate `mocap_worker_snapshot-0.5.0.zip` preserves the worker/helper directory layout; it is **not** a standalone custom-node ZIP. Follow the worker setup guide to install its custom-node symlink.
+Install `dist/mocap_comfy-0.6.0.zip` in Blender. The separate `mocap_worker_snapshot-0.6.0.zip` preserves the worker/helper directory layout; it is **not** a standalone custom-node ZIP. Follow the worker setup guide to install its custom-node symlink.
 
 ## What this repository preserves
 

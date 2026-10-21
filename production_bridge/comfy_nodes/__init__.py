@@ -37,6 +37,12 @@ class MocapProcessVideo:
         }, 'optional': {
             'face_capture': (['none', 'sam_native', 'realdenseface_flame'], {'default': 'none'}),
             'progress_id': ('STRING', {'default': ''}),
+            'scene_camera': ('STRING', {'default': '', 'tooltip': 'Uploaded scene-camera JSON from the Blender add-on (solved camera)'}),
+            'actor_box': ('STRING', {'default': '', 'tooltip': 'Normalized [x1,y1,x2,y2] picked in the actor preview'}),
+            'plate_lock': ('FLOAT', {'default': 1., 'min': 0., 'max': 1.}),
+            'plate_lock_smoothing': ('FLOAT', {'default': 3., 'min': 0., 'max': 12.}),
+            'orientation_lock': ('FLOAT', {'default': .5, 'min': 0., 'max': 1.}),
+            'warm_models': ('BOOLEAN', {'default': False, 'tooltip': 'Keep GVHMR/SAM loaded in host RAM between jobs'}),
         }}
 
     RETURN_TYPES = ()
@@ -61,10 +67,22 @@ class MocapProcessVideo:
         source = (input_root/video).resolve()
         if not source.is_relative_to(input_root) or not source.is_file():
             raise ValueError('Video must be an uploaded file inside the ComfyUI input directory')
+        camera_name = options.pop('scene_camera', '')
+        camera = (input_root/camera_name).resolve() if camera_name else None
+        if camera is not None and (not camera.is_relative_to(input_root) or not camera.is_file()):
+            raise ValueError('Scene camera must be an uploaded file inside the ComfyUI input directory')
+        box = options.pop('actor_box', '')
+        if box:
+            box = json.loads(box)
+            if len(box) != 4 or not all(0 <= float(v) <= 1 for v in box):
+                raise ValueError('Actor box must be four normalized coordinates')
+            options['actor_box'] = [float(v) for v in box]
         job_id = uuid.UUID(progress_id).hex if progress_id else uuid.uuid4().hex
         output = Path(folder_paths.get_output_directory())/'mocap'/job_id
         output.mkdir(parents=True)
         bundle = output/'result.mocap.zip'
+        if camera is not None:
+            options['scene_camera'] = camera_name
         plan = ['prepare', 'gvhmr']+(['sam'] if options['method'] == 'hybrid' else [])+(['face'] if options['face_capture'] == 'realdenseface_flame' else [])+['export']
         progress = comfy.utils.ProgressBar(len(plan))
         started = time.time()
@@ -76,6 +94,8 @@ class MocapProcessVideo:
             config = work/'options.json'
             config.write_text(json.dumps(options))
             command = [PYTHON, '-u', str(BRIDGE/'worker.py'), '--study', str(STUDY), '--job-root', str(work), '--video', str(source), '--options', str(config), '--output', str(bundle)]
+            if camera is not None:
+                command += ['--camera', str(camera)]
             env = dict(os.environ, OMP_NUM_THREADS='2', OPENBLAS_NUM_THREADS='1', MKL_NUM_THREADS='2', HF_HUB_DISABLE_TELEMETRY='1', DO_NOT_TRACK='1', MOCAP_STATUS_FILE=str(work/'status.json'), PYTHONUNBUFFERED='1')
             with (output/'job.log').open('w') as log:
                 child = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, env=env, start_new_session=True)

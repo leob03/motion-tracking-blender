@@ -127,3 +127,19 @@ The tested fork must accept movie upload through `/upload/image`, expose standar
 ## FLAME editing update (0.4.0)
 
 Deploy `production_bridge/flame_export.py` alongside the updated `worker.py`, and update the artist add-on to 0.4.0. The existing RealDenseFace/FLAME model assets and Python environment are reused. Each facial export verifies its model replay against the retained fit. New editable facial results use bundle v2; an older artist add-on will reject them. Non-FLAME jobs still use v1. See [editing and retained-capture upgrades](FLAME_EDITING.md).
+
+## Worker update 0.6.0
+
+Deploy `worker.py`, the new `media.py` and `scene_camera.py`, both `comfy_nodes/` files and `comparison_study/run_model.py` together, then restart ComfyUI. Models and the Python environment are unchanged.
+
+- **Intermediate video:** the prepared clip is H.264 4:4:4 CRF 10 through PyAV (PSNR 45.9 dB vs 39.3 dB for the former OpenCV `mp4v`); the actor mask video is lossless. Movies are read sequentially from frame 0, so the start frame is exact for every codec.
+- **Actor detection** runs on the GPU in half precision when CUDA is visible (CPU otherwise); its memory is released before inference.
+- **Image sequences:** the add-on uploads a ZIP of display-referred JPEG frames plus `plate.json` (the ViPE add-on's proxy format); `media.Plate` reads movies and such archives alike.
+- **Upload reuse:** uploads are named `<sha256>.<ext>`; `GET /mocap/upload/{name}` tells the add-on whether the worker already has that content.
+- **Actor preview:** `POST /mocap/detect {video, frame, max_side, fps_override}` returns numbered person boxes (normalized) and a JPEG preview without using the prompt queue. The job input `actor_box` selects that actor by overlap instead of by left-to-right index.
+- **Scene camera:** optional input `scene_camera` names an uploaded camera JSON (version 1; OpenCV camera-to-parent matrices in metres, Z-up, plus `[fx, fy, cx, cy]` per frame in plate pixels). GVHMR then uses the camera's rotations instead of SimpleVO, the camera intrinsics replace the estimate, and the body is placed in that camera's world (see the bundle doc). `plate_lock` (0–1), `orientation_lock` (0–1, default 0.5) and `plate_lock_smoothing` (frames, default 3) control the plate corrections. `MOCAP_DEBUG_KEEP=DIR` keeps each job's intermediates for offline tuning.
+- **Focal fix:** SimpleVO now receives the job focal (it previously always assumed the image-diagonal focal, so a user focal reached GVHMR but not the odometry).
+
+### Optional warm models
+
+With the job input `warm_models=true`, `worker.py` hands GVHMR and SAM inference to long-lived `run_model.py serve` processes (one per model) over Unix sockets in `MOCAP_WARM_DIR` (default `/tmp/mocap-warm-<uid>`). They keep models in host RAM (about 6–7 GB per process) and release GPU memory after every job except the CUDA context (about 0.25 GB each), so they coexist with other GPU work. They exit after `MOCAP_WARM_IDLE_SECONDS` (default 900) without a job. Inference stays serialized by the same `inference.lock`; a cancelled job kills the server it was using. RealDenseFace still runs per job. Leave it off on shared pools where host RAM is scarce.

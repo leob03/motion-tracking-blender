@@ -3,6 +3,8 @@ import bpy
 from mathutils import Matrix, Vector
 import numpy as np
 
+from .keys import continuous_quaternions, key_array
+
 
 def create_armature(collection, name, arrays, axis, start):
     names = arrays['rig_names'].tolist()
@@ -52,29 +54,27 @@ def create_armature(collection, name, arrays, axis, start):
     blender_rest = np.stack([np.array(data.bones[n].matrix_local) for n in names])
     rest_inv = np.linalg.inv(blender_rest)
     change_basis = np.linalg.inv(rest)@convert.T@blender_rest
-    last = {}
+    frames, joints = len(arrays['rig_pose']), len(names)
+    location, rotation, scaling = np.empty((frames, joints, 3)), np.empty((frames, joints, 4)), np.empty((frames, joints, 3))
     for frame, pose in enumerate(arrays['rig_pose']):
         posed = convert@pose@change_basis
-        for j, bone_name in enumerate(names):
+        inverse = np.linalg.inv(posed)
+        for j in range(joints):
             parent = int(parents[j])
-            basis = rest_inv[j]@posed[j] if parent < 0 else rest_inv[j]@blender_rest[parent]@np.linalg.inv(posed[parent])@posed[j]
-            pb = arm.pose.bones[bone_name]
-            location, rotation, scale = Matrix(basis.tolist()).decompose()
-            if bone_name in last and rotation.dot(last[bone_name]) < 0:
-                rotation.negate()
-            last[bone_name] = rotation.copy()
-            pb.rotation_mode = 'QUATERNION'
-            if bone_name.startswith('FLAME_'):
-                pb.lock_location = (True, True, True)
-                pb.lock_scale = (True, True, True)
-            pb.location, pb.rotation_quaternion, pb.scale = location, rotation, scale
-            for prop in ('location', 'rotation_quaternion', 'scale'):
-                pb.keyframe_insert(prop, frame=start+frame, group=bone_name)
-    action = arm.animation_data.action
-    action.name = name+' · Captured motion'
-    for curve in action.fcurves:
-        for key in curve.keyframe_points:
-            key.interpolation = 'LINEAR'
+            basis = rest_inv[j]@posed[j] if parent < 0 else rest_inv[j]@blender_rest[parent]@inverse[parent]@posed[j]
+            loc, rot, sca = Matrix(basis.tolist()).decompose()
+            location[frame, j], rotation[frame, j], scaling[frame, j] = loc, rot, sca
+    rotation = continuous_quaternions(rotation)
+    for j, bone_name in enumerate(names):
+        pb = arm.pose.bones[bone_name]
+        pb.rotation_mode = 'QUATERNION'
+        if bone_name.startswith('FLAME_'):
+            pb.lock_location = (True, True, True)
+            pb.lock_scale = (True, True, True)
+        pb.location, pb.rotation_quaternion, pb.scale = location[0, j], rotation[0, j], scaling[0, j]
+        for prop, values in (('location', location), ('rotation_quaternion', rotation), ('scale', scaling)):
+            key_array(pb, prop, values[:, j], start, group=bone_name)
+    arm.animation_data.action.name = name+' · Captured motion'
     return arm
 
 

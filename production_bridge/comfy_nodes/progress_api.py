@@ -1,6 +1,11 @@
 """Job-scoped, bounded log reads through the existing ComfyUI HTTP server."""
+import asyncio
 import json
+import os
 from pathlib import Path
+import re
+import sys
+import tempfile
 import time
 import uuid
 
@@ -16,7 +21,7 @@ def atomic_json(path, value):
 
 
 def signature(options):
-    return {key: options.get(key) for key in ('method', 'face_capture', 'hand_refinement', 'moving_camera', 'max_side')}
+    return {key: options.get(key) for key in ('method', 'face_capture', 'hand_refinement', 'moving_camera', 'max_side', 'warm_models')}
 
 
 def estimate_seconds(root, options, frames):
@@ -63,3 +68,58 @@ async def status(request):
         result['log_size'] = size
         result['seconds_since_log'] = max(0., time.time()-log.stat().st_mtime)
     return web.json_response(result)
+
+
+UPLOAD_NAME = re.compile(r'^[0-9a-f]{64}\.(mp4|mov|mkv|avi|webm|m4v|zip|json)$')
+
+
+def uploaded(name):
+    """Content-addressed upload in input/mocap; names are <sha256>.<ext> only."""
+    if not UPLOAD_NAME.match(name or ''):
+        raise ValueError('Invalid upload name')
+    return Path(folder_paths.get_input_directory())/'mocap'/name
+
+
+@PromptServer.instance.routes.get('/mocap/upload/{name}')
+async def upload_exists(request):
+    """Lets the add-on skip re-uploading a plate the worker already has."""
+    try:
+        path = uploaded(request.match_info['name'])
+    except ValueError as exc:
+        return web.json_response({'error': str(exc)}, status=400)
+    return web.json_response({'exists': path.is_file(), 'size': path.stat().st_size if path.is_file() else None})
+
+
+_detect_lock = asyncio.Lock()
+
+
+@PromptServer.instance.routes.post('/mocap/detect')
+async def detect(request):
+    """Numbered person boxes on one frame of an uploaded plate (a few seconds; no inference queue)."""
+    from . import BRIDGE, PYTHON, STUDY
+    try:
+        body = await request.json()
+        source = uploaded(body['video'])
+        frame, max_side = int(body.get('frame', 0)), int(body.get('max_side', 1280))
+        fps = float(body.get('fps_override', 0.))
+    except (ValueError, KeyError, TypeError) as exc:
+        return web.json_response({'error': f'Invalid request: {exc}'}, status=400)
+    if not source.is_file():
+        return web.json_response({'error': 'Upload the video first'}, status=404)
+    async with _detect_lock:
+        with tempfile.TemporaryDirectory(prefix='mocap-detect-') as scratch:
+            output = Path(scratch)/'detect.json'
+            child = await asyncio.create_subprocess_exec(
+                PYTHON, '-u', str(BRIDGE/'worker.py'), '--study', str(STUDY), '--video', str(source),
+                '--detect', str(frame), '--max-side', str(max_side), '--fps-override', str(fps), '--output', str(output),
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+                env=dict(os.environ, OMP_NUM_THREADS='2', PYTHONUNBUFFERED='1'))
+            try:
+                log, _ = await asyncio.wait_for(child.communicate(), timeout=300)
+            except asyncio.TimeoutError:
+                child.kill()
+                return web.json_response({'error': 'Actor detection timed out'}, status=504)
+            if child.returncode or not output.is_file():
+                tail = log.decode('utf-8', errors='replace').strip().splitlines()[-1:] or ['unknown error']
+                return web.json_response({'error': 'Actor detection failed: '+tail[0]}, status=500)
+            return web.json_response(json.loads(output.read_text()))

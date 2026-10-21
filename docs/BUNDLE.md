@@ -55,3 +55,14 @@ Old add-ons reject version 2 rather than silently importing an incomplete face. 
 | `flame_bone_quaternions` | F×3×4 captured jaw/left-eye/right-eye local quaternions, WXYZ |
 
 `rig_vertices` in v2 is the residual surface: add expression directions times coefficients before skinning. Blender uses relative, linearly keyed frame residuals and expression keys. `vertices_world` remains the complete unedited captured surface, including when importing without an armature. Captured face controls are also stored in the Blender mesh for the restore-frame operator. The resulting animation evaluates without add-on handlers or model files.
+
+## Scene-camera placement and plates (add-on 0.6.0)
+
+These additions keep bundle versions 1/2; older add-ons import such bundles but ignore the scene parent.
+
+- `manifest.camera_mode`: `"inferred"` (as before) or `"scene"` when the job received a solved camera from the artist's scene.
+- `manifest.scene_camera` (scene mode): camera `name` and `parent` object names, `world_scale` (parent scale; the bundle is in metres of the parent's space), `scene_up`, `registration` (`residual_median_m`, `residual_p95_m`, `downweighted_frames`, `scale_estimate`), `gravity_tilt_degrees`, `plate_error_before_lock_px`, `plate_error_px` (mean/p95/max, processing pixels), `plate_lock` (`strength`, `smoothing_frames`, offsets) and `orientation_lock` (0–1).
+- In scene mode `camera_to_world` and `K` are the supplied camera (converted to Y-up metres); `inferred_camera_to_world` is GVHMR's own camera after registration, for comparison. `actor_camera_to_world` is omitted.
+- `manifest.original_width/original_height`: plate size before downscaling. `manifest.plate`: for image sequences, the proxy's `plate.json` (`first_frame`, `pattern`, `colorspace`, `fps_num/fps_den`, proxy size).
+
+Scene placement: GVHMR's world body is mapped into the camera's world by **one** rigid transform for the whole shot, robustly fitted to GVHMR's camera-space body carried through the supplied camera. A per-frame offset parallel to the image plane (zero change in camera depth), Gaussian-smoothed over `smoothing_frames`, then moves the hip onto the viewing ray of the network's own camera-space hip ("plate lock"). For the hybrid, the reference is SAM's camera-space body. The rotation lock turns the root about the hip by the same-smoothed rotation between the world root orientation and the network's camera-space root orientation carried through the camera. The importer parents the character to an empty under the camera's parent with scale `1/world_scale`, so later alignment edits of that parent (e.g. ViPE floor/scale/axis tools) carry the body along.

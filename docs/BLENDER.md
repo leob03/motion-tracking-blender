@@ -2,37 +2,54 @@
 
 ## Install
 
-Build `mocap_comfy-0.5.0.zip` with `python scripts/build_packages.py` (output in `dist/`). Install it through **Edit → Preferences → Add-ons → Install from Disk**, enable **Mocap ComfyUI**, then restart Blender. Blender 4.4.0 on Linux is tested; Windows remains unvalidated.
+Build `mocap_comfy-0.6.0.zip` with `python scripts/build_packages.py` (output in `dist/`). Install it through **Edit → Preferences → Add-ons → Install from Disk**, enable **Mocap ComfyUI**, then restart Blender. Blender 4.4.0 on Linux is tested; Windows remains unvalidated.
 
-Open the 3D View sidebar with **N**, then **Mocap**. Enter the worker's ComfyUI URL. For a local worker use `http://127.0.0.1:8188`. A remote worker can use the team's approved HTTP(S) endpoint or an SSH tunnel:
+The worker URL, optional bearer token and download folder are **add-on preferences** (shared by all scenes; also shown in the **Worker** sub-panel). For a local worker use `http://127.0.0.1:8188`. A remote worker can use the team's approved HTTP(S) endpoint or an SSH tunnel:
 
 ```bash
 ssh -N -L 8188:127.0.0.1:8188 USER@GPU_WORKER
 ```
 
-Use `http://127.0.0.1:8188` in Blender on the tunnel's client machine. The video stays selectable from that artist machine and is uploaded through HTTP. No shared filesystem is required. Bearer-token support exists in advanced settings; tokens are not saved in the scene. The production gateway has not been validated.
+The plate stays on the artist machine and is uploaded over HTTP once per content (a SHA-256 name lets later jobs reuse it). No shared filesystem is required. Tokens are never saved in the scene. The production gateway has not been validated.
 
-## Submit
+## Panel layout (3D View sidebar → Mocap)
 
-1. Choose a local MP4/MOV/MKV/AVI/WebM/M4V file. Pick a zero-based source start and frame count. **0 means all remaining frames**; start with 24 frames for a new worker. Temporal inference needs at least eight decodable frames.
-2. Choose an actor: indices 0, 1, 2 run left to right in the first selected frame; -1 chooses the largest. The chosen boxes are tracked through the range. This is not the study portal's click/mask selector.
-3. Choose **SAM + GVHMR world/root**, or **GVHMR body + world (faster)**. Hybrid offers hand refinement, SAM smoothing, and three face choices: off, SAM native, RealDenseFace + FLAME head.
-4. Choose moving/static camera, timeline start, mesh and armature import. Default Blender start is 1001; **Video fit** is the default review camera.
-5. Press **Submit to ComfyUI**. Networking runs in a background thread; scene import runs on Blender's main thread. Models run sequentially on the worker.
+The header shows the worker state (refresh button = **Check Connection**), the **Submit to ComfyUI** button and the selected job's stage checklist, progress, elapsed time and estimate. Sub-panels:
 
-The six numbered sections collapse independently and start closed in new layouts. Existing saved Blender layouts can retain their previous open/closed states. **Face corrections** follows **Bring into Blender**, before **Progress and logs** and **Saved results**. **Progress and logs** shows available stage/frame counts, elapsed time, last worker activity and approximate remaining time. **Open Live Log** splits the viewport and places a Text Editor on its right. **Close Log** in its header or the Mocap sidebar closes the pane. Repeated opens reuse it. Restore a maximized viewport with Ctrl Space first. Full received logs are saved alongside downloads; the visible text retains the last 100,000 characters.
+1. **Worker**: URL, token, download folder, *Keep models warm on worker*.
+2. **Plate and actor**: a movie, or any frame of an EXR/DPX/TIFF/PNG/JPEG sequence. Size, frame count and fps are read from headers. **First/Last** are 1-based for movies and file frame numbers for sequences (↔ selects the whole plate); the line below shows the frame count and timeline range. Sequences ask for their colour space: the add-on tone-maps and downsizes the selection to a JPEG proxy before upload (ViPE's proxy format) and keeps the file frame numbers on the timeline. **Detect Actors** uploads the plate (reused by the job) and shows the first frame with numbered people; click a number to pick the actor. The job then selects that person by overlap. Without detection, actors are numbered 0, 1, 2 left to right; −1 picks the largest.
+3. **Camera**:
+   - *Estimate from footage*: as before; focal assumed from the image diagonal.
+   - *Known lens*: focal length (mm) and filmback; camera motion still inferred.
+   - *Solved scene camera*: pick a tracked camera in this scene (ViPE, 3DE, …). See below.
+4. **Processing**: preset (*Quick body (GVHMR)*, *Body + hands*, *Body + hands + face*) with the underlying method, hand refinement, face and smoothing settings; processing size and FPS override.
+5. **Import**: mesh/armature/auto-import options and **Import Saved Bundle…**.
+6. **Result** (when a result is active): summary (frames, camera, plate error, world-fit residual, worker timings), review cameras, **Edit Body / Finger Bones**, **Export to Nuke…**.
+7. **Face corrections**: unchanged; see [facial editing](FLAME_EDITING.md).
+8. **Jobs**: every submitted job of this scene (state icons), **Resume**, **Import**, **Show Log**, remove from list. Several jobs (actors, ranges) can be queued at once; the worker runs them in order.
+9. **Logs**: live log pane beside the viewport.
 
-**Cancel This Job** requires the fork's job-specific cancellation route. **Resume Job** reconnects using a saved prompt ID; it does not submit a duplicate. A server restart may remove queue/history, so retain downloaded results. **Import Downloaded Bundle** imports an existing `.mocap.zip` without inference.
+## Solved scene camera (ViPE hand-off)
+
+1. Track the plate with the **ViPE Remote Tracking** add-on (or import another solved camera). Set its floor/origin/scale with ViPE's scene alignment tools if you need a ground-aligned scene; this can also be done afterwards.
+2. In **Camera**, choose *Solved scene camera* and pick the camera (the camera button uses the scene's active camera). For a ViPE camera the timing is taken from its job; for any other camera, video frame **First** lands on **Blender start frame**. Warnings appear if the camera is not keyed over the job range, if the ViPE plate size differs, or if ViPE estimated lens distortion (the body is fitted on the distorted plate).
+3. Submit. The camera is sampled on every job frame and uploaded with the plate.
+
+The worker keeps GVHMR's **world motion** (it feeds the solved camera rotations to GVHMR instead of its own odometry) and places it into the scene with one rigid transform for the whole shot. A small sideways **plate lock**, never a change in depth, then keeps the body on the plate, and a **rotation lock** turns the body's root toward the orientation seen in the plate. *Plate lock* 0 keeps GVHMR's world placement (and its foot contacts); 1 follows the plate. *Rotation lock* defaults to 0.5; use 1 on plate-critical shots. *Lock smoothing* (frames, default 3) trades plate fit against jitter. When GVHMR's world drifts relative to the solved camera, following the plate costs some foot sliding: choose per shot. The imported character is parented to the camera's parent, so it follows later ViPE alignment edits, and the ViPE camera stays the active camera. GVHMR's own camera is added hidden for comparison. The Result panel reports the plate error (pixels), the world-fit residual and the tilt between GVHMR's gravity and the scene's up axis (large values mean the scene is not ground-aligned yet).
 
 ## Review and edit
 
-New imports create a `Mocap | shot | actor` collection containing **01 Character** and **02 Cameras**. Both cameras are visible; separate reference-marker empties are no longer created. Existing objects and earlier imports remain untouched. Timeline, frame rate, resolution, units and active camera are set from the result.
+New imports create a `Mocap | shot | actor` collection containing **01 Character** and **02 Cameras**. Existing objects and earlier imports remain untouched. Timeline, frame rate, plate resolution and units are set from the result; curves are written in bulk (import up to about 2× faster).
 
-- **Video Fit Camera** preserves this hybrid actor's SAM projection after replacing its world/root transform. It cannot be assumed to fit other actors or the background.
-- **GVHMR World Camera** is GVHMR's native inferred camera; the hybrid mesh can differ from its original video fit. GVHMR-only jobs use this camera for either review choice.
+- **Video Fit Camera** (estimated cameras) preserves this hybrid actor's SAM projection after replacing its world/root transform. It cannot be assumed to fit other actors or the background.
+- **GVHMR World Camera** is GVHMR's native inferred camera; the hybrid mesh can differ from its original video fit.
 
-Press numpad 0 to review the movie background. Click **Edit Body / Finger Bones**, adjust bones in Pose Mode, then insert transform keys or use Auto Keying. Capture is keyed on every frame: unkeyed edits disappear when scrubbing. The rig is FK, without animator IK controls. The unedited fitted surface is preserved through a cache before skinning; learned correctives are not recomputed for large manual pose changes.
+Press numpad 0 to review the plate background (movie clip, or the proxy frames for sequences). Click **Edit Body / Finger Bones**, adjust bones in Pose Mode, then insert keys or use Auto Keying. Capture is keyed on every frame: unkeyed edits disappear when scrubbing. The rig is FK, without animator IK controls. Hybrid rigs have 127 MHR bones, or 131 with editable FLAME; GVHMR rigs have 55 SMPL-X bones. GVHMR does not predict finger motion.
 
-Hybrid rigs have 127 MHR bones, or 131 with editable FLAME; GVHMR rigs have 55 SMPL-X bones. GVHMR does not predict finger motion. For RealDenseFace + FLAME, open **4. Face corrections** and press **Face Close-up** to drag mouth, brow and eyelid handles, open/close the jaw or adjust eye aim. Drags key automatically by default; Ctrl Z undoes and Esc cancels. Numerical expression keys and native bones remain available. See [facial editing](FLAME_EDITING.md). SAM-native facial animation remains cached.
+## Nuke
 
-Frame-count defaults apply to new settings. Saved scenes retain their stored values. Reimport old downloaded bundles to obtain the new names/organization; bundles predating native rig export remain cache-only.
+**Export to Nuke…** writes, for the active result: `<shot>_mocap.nk` (plate Read, Camera2, ReadGeo2 of the body Alembic, Scene and ScanlineRender check), `<shot>_camera.chan` and `<shot>_body.abc` (skinned body and camera, world space, metres), plus a README. Conventions match the ViPE exporter (Camera2 `rot_order ZXY`, filmback from the Blender camera). The `.nk` wiring was generated without Nuke and is unverified.
+
+## Jobs, cancellation and resume
+
+**Cancel Job** uses the fork's job-scoped cancellation route. **Resume** reconnects to a submitted job (job ID kept in the scene) without submitting it again. A server restart may remove queue/history, so keep downloaded results. Full received logs are saved with each download.

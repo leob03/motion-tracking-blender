@@ -6,6 +6,8 @@ from bpy.types import Operator, Panel
 from mathutils import Quaternion
 import numpy as np
 
+from .keys import key_array
+
 BONES = ('FLAME_jaw', 'FLAME_eye.L', 'FLAME_eye.R')
 PREFIX = 'FLAME Expression '
 
@@ -23,12 +25,8 @@ def add_expression_keys(mesh, arm, arrays, axis, start):
         key.slider_min, key.slider_max = -10., 10.
         co = basis.copy(); co[offset:] += direction@axis.T*scales[i]
         key.data.foreach_set('co', co.ravel())
-        for f, value in enumerate(expr[:, i]/scales[i]):
-            key.value = float(value)
-            key.keyframe_insert('value', frame=start+f, group='FLAME expressions')
-    for fc in mesh.data.shape_keys.animation_data.action.fcurves:
-        for k in fc.keyframe_points:
-            k.interpolation = 'LINEAR'
+        key.value = float(expr[0, i]/scales[i])
+        key_array(key, 'value', expr[:, i]/scales[i], start, group='FLAME expressions')
     mesh['flame_capture'] = json.dumps(dict(start=start, expressions=expr.tolist(), scales=scales.tolist(), quaternions=arrays['flame_bone_quaternions'].tolist()))
     mesh['flame_vertex_offset'] = offset
     mesh['flame_expression_count'] = expr.shape[1]
@@ -115,13 +113,13 @@ class MOCAP_OT_face_restore(Operator):
 
 
 class MOCAP_PT_face(Panel):
-    bl_label = '4. Face corrections'
+    bl_label = 'Face corrections'
     bl_idname = 'MOCAP_PT_face'
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = 'Mocap'
     bl_parent_id = 'MOCAP_PT_comfy'
-    bl_order = 3
+    bl_order = 6
     bl_options = {'DEFAULT_CLOSED'}
     def draw(self, context):
         layout = self.layout

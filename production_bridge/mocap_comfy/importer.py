@@ -2,11 +2,13 @@
 import io
 import json
 from pathlib import Path
+import re
 import zipfile
 
 import bpy
 from mathutils import Matrix
 import numpy as np
+from .keys import continuous_quaternions, fcurves, key_array
 from .rig import create_armature, bind_mesh
 
 Y_UP_TO_Z_UP = np.array([[1, 0, 0], [0, 0, -1], [0, 1, 0]], dtype=float)
@@ -52,8 +54,9 @@ def read_bundle(path):
     ratio = K[:, 0, 0]/K[:, 1, 1]
     if np.max(np.abs(ratio-ratio[0])) > 1e-6:
         raise ValueError('Changing pixel aspect ratio is unsupported')
-    if 'actor_camera_to_world' in arrays and (arrays['actor_camera_to_world'].shape != (n, 4, 4) or not np.isfinite(arrays['actor_camera_to_world']).all()):
-        raise ValueError('Invalid actor-fit camera')
+    for key in ('actor_camera_to_world', 'inferred_camera_to_world'):
+        if key in arrays and (arrays[key].shape != (n, 4, 4) or not np.isfinite(arrays[key]).all()):
+            raise ValueError('Invalid camera array: '+key)
     rig_keys = {'rig_names', 'rig_parents', 'rig_rest', 'rig_pose', 'rig_indices', 'rig_weights', 'rig_vertices'}
     if rig_keys.intersection(arrays):
         if not rig_keys.issubset(arrays):
@@ -113,40 +116,32 @@ def result_collection(obj):
     return None
 
 
-def linear(block):
-    if block.animation_data and block.animation_data.action:
-        for curve in block.animation_data.action.fcurves:
-            for key in curve.keyframe_points:
-                key.interpolation = 'LINEAR'
+IMAGE_SUFFIXES = {'.jpg', '.jpeg', '.png', '.exr', '.tif', '.tiff', '.dpx'}
 
 
-def make_camera(collection, name, matrices, K, width, height, start):
+def make_camera(collection, name, matrices, K, width, height, start, parent=None):
     data = bpy.data.cameras.new(name)
     obj = bpy.data.objects.new(name, data)
     collection.objects.link(obj)
+    obj.parent = parent
     obj.rotation_mode = 'QUATERNION'
     data.sensor_fit = 'HORIZONTAL'
     data.sensor_width = 36.
     data.clip_start, data.clip_end = .01, 10000.
-    previous = None
-    for i, matrix in enumerate(matrices):
-        R = Y_UP_TO_Z_UP @ matrix[:3, :3] @ CAMERA_LOCAL
-        obj.location = Y_UP_TO_Z_UP @ matrix[:3, 3]
-        q = Matrix(R.tolist()).to_quaternion()
-        if previous is not None and q.dot(previous) < 0:
-            q.negate()
-        previous = q.copy()
-        obj.rotation_quaternion = q
-        obj.keyframe_insert('location', frame=start+i)
-        obj.keyframe_insert('rotation_quaternion', frame=start+i)
-        fx, fy, cx, cy = K[i, 0, 0], K[i, 1, 1], K[i, 0, 2], K[i, 1, 2]
-        data.lens = fx*data.sensor_width/width
-        data.shift_x = (width/2-cx)/width
-        data.shift_y = (cy-height/2)*fx/fy/width
-        for prop in ('lens', 'shift_x', 'shift_y'):
-            data.keyframe_insert(prop, frame=start+i)
-    linear(obj)
-    linear(data)
+    rotations = np.einsum('ij,fjk,kl->fil', Y_UP_TO_Z_UP, matrices[:, :3, :3], CAMERA_LOCAL)
+    quaternions = continuous_quaternions([Matrix(R.tolist()).to_quaternion() for R in rotations])
+    locations = matrices[:, :3, 3]@Y_UP_TO_Z_UP.T
+    obj.location, obj.rotation_quaternion = locations[0], quaternions[0]
+    key_array(obj, 'location', locations, start)
+    key_array(obj, 'rotation_quaternion', quaternions, start)
+    fx, fy, cx, cy = K[:, 0, 0], K[:, 1, 1], K[:, 0, 2], K[:, 1, 2]
+    lens = fx*data.sensor_width/width
+    shift_x, shift_y = (width/2-cx)/width, (cy-height/2)*fx/fy/width
+    constant = all(np.ptp(v) < 1e-9*max(1., abs(v[0])) for v in (lens, shift_x, shift_y))
+    data.lens, data.shift_x, data.shift_y = float(lens[0]), float(shift_x[0]), float(shift_y[0])
+    if not constant:
+        for prop, values in (('lens', lens), ('shift_x', shift_x), ('shift_y', shift_y)):
+            key_array(data, prop, values, start)
     return obj
 
 
@@ -163,15 +158,18 @@ def mesh_cache(collection, name, vertices, faces, start, relative=False):
         key.data.foreach_set('co', vertices[i].astype(np.float32).ravel())
     for i, key in enumerate(mesh.shape_keys.key_blocks):
         key.interpolation = 'KEY_LINEAR'
-        if relative:
-            if i:
-                for frame, value in [(start, 0.), (start+i-1, 0.), (start+i, 1.)]+([(start+i+1, 0.)] if i < len(vertices)-1 else []):
-                    key.value = value
-                    key.keyframe_insert('value', frame=frame, group='Captured surface residual')
-        else:
-            mesh.shape_keys.eval_time = key.frame
-            mesh.shape_keys.keyframe_insert('eval_time', frame=start+i)
-    linear(mesh.shape_keys)
+        if relative and i:
+            for frame, value in [(start, 0.), (start+i-1, 0.), (start+i, 1.)]+([(start+i+1, 0.)] if i < len(vertices)-1 else []):
+                key.value = value
+                key.keyframe_insert('value', frame=frame, group='Captured surface residual')
+    if relative:
+        for curve in fcurves(mesh.shape_keys.animation_data.action):
+            for point in curve.keyframe_points:
+                point.interpolation = 'LINEAR'
+    else:
+        frames = [key.frame for key in mesh.shape_keys.key_blocks]
+        mesh.shape_keys.eval_time = frames[0]
+        key_array(mesh.shape_keys, 'eval_time', frames, start)
     for polygon in mesh.polygons:
         polygon.use_smooth = True
     material = bpy.data.materials.new('Mocap blue')
@@ -180,10 +178,59 @@ def mesh_cache(collection, name, vertices, faces, start, relative=False):
     return obj
 
 
-def import_bundle(path, start=1001, include_mesh=True, video='', scene=None, camera_view='WORLD', include_rig=True):
+def add_background(camera, video, start, source_start, count):
+    """Movie clip, or a numbered image sequence (local proxy frames of a sequence plate)."""
+    path = Path(video)
+    data = camera.data
+    background = data.background_images.new()
+    if path.suffix.lower() in IMAGE_SUFFIXES:
+        image = bpy.data.images.load(str(path.resolve()), check_existing=True)
+        image.source = 'SEQUENCE'
+        background.source = 'IMAGE'
+        background.image = image
+        number = int(re.search(r'(\d+)\.[^.]+$', path.name).group(1))
+        background.image_user.frame_start = start
+        background.image_user.frame_offset = number-1
+        background.image_user.frame_duration = count
+    else:
+        clip = bpy.data.movieclips.load(str(path.resolve()), check_existing=True)
+        clip.frame_start = start-source_start
+        background.source = 'MOVIE_CLIP'
+        background.clip = clip
+    background.frame_method = 'STRETCH'
+    background.alpha = .65
+    data.show_background_images = True
+
+
+def summary_lines(manifest, start, scene_camera):
+    n = manifest['frames']
+    lines = [f"{manifest['rig']['type'] if manifest.get('rig') else manifest['method']} · {n} frames · timeline {start}–{start+n-1}",
+             f"Face: {manifest.get('face_capture', 'none').replace('_', ' ')} · {manifest['rig']['bones'] if manifest.get('rig') else 0} bones"]
+    info = manifest.get('scene_camera')
+    if info:
+        error = info.get('plate_error_px', {})
+        registration = info.get('registration', {})
+        lines.append(f"Camera: {scene_camera or info.get('name')} (solved) · plate error {error.get('mean_px', 0):.1f} px mean, {error.get('p95_px', 0):.1f} px p95")
+        lines.append(f"World fit residual {registration.get('residual_median_m', 0)*100:.1f} cm · plate lock up to {info.get('plate_lock', {}).get('max_offset_m', 0)*100:.0f} cm · rotation lock {info.get('orientation_lock', 0):.1f}")
+        if info.get('gravity_tilt_degrees', 0) > 5:
+            lines.append(f"GVHMR gravity is {info['gravity_tilt_degrees']:.0f}° from the scene's up axis: set the floor (ViPE scene alignment) if the scene should be ground-aligned")
+    else:
+        lines.append('Camera: inferred from the footage (' + manifest.get('intrinsics_source', 'estimated') + ')')
+    timings = manifest.get('timings') or {}
+    parts = [f'{label} {timings[key]:.0f}s' for label, key in [('prep', 'prepare_seconds'), ('GVHMR', 'gvhmr_seconds'), ('SAM', 'sam_seconds'), ('face', 'face_seconds'), ('export', 'export_seconds')] if key in timings]
+    if parts:
+        lines.append('Worker: '+' · '.join(parts))
+    return lines
+
+
+def import_bundle(path, start=1001, include_mesh=True, video='', scene=None, camera_view='WORLD', include_rig=True, plate=None):
     manifest, arrays = read_bundle(path)
     scene = scene or bpy.context.scene
-    shot = Path(video).stem if video else Path(manifest.get('source', 'Shot')).stem
+    source_name = (plate or {}).get('video') or video or manifest.get('source', 'Shot')
+    stem = Path(source_name).stem
+    if plate and plate.get('sequence'):
+        stem = re.sub(r'[._]?\d+$', '', stem)  # plate.1001.exr -> plate
+    shot = re.sub(r'[._#]+$', '', stem) or 'Shot'
     collection = bpy.data.collections.new(f'Mocap | {shot[:24]} | {manifest["track_id"]}')
     scene.collection.children.link(collection)
     collection['bundle'] = str(path)
@@ -192,6 +239,14 @@ def import_bundle(path, start=1001, include_mesh=True, video='', scene=None, cam
     collection['camera_note'] = manifest['camera_note']
     collection['face_capture'] = manifest.get('face_capture', 'none')
     collection['timings'] = json.dumps(manifest.get('timings', {}))
+    collection['start_frame'] = start
+    collection['frames'] = int(manifest['frames'])
+    if plate and plate.get('plate'):
+        collection['plate_pattern'] = str(Path(plate['video']).parent/plate['plate']['pattern'])
+        collection['plate_first_frame'] = int(plate['plate']['first_frame'])
+    elif video and Path(video).suffix.lower() not in IMAGE_SUFFIXES:
+        collection['plate_movie'] = str(Path(video).resolve())
+        collection['source_start_frame'] = int(manifest['source_start_frame'])
     children = {}
     for key, label in [('actor', '01 Character'), ('cameras', '02 Cameras')]:
         child = bpy.data.collections.new(f'{label} | {shot[:24]}')
@@ -203,7 +258,8 @@ def import_bundle(path, start=1001, include_mesh=True, video='', scene=None, cam
     scene.render.fps = round(fps)
     scene.render.fps_base = round(fps)/fps
     scene.frame_start, scene.frame_end = start, start+n-1
-    scene.render.resolution_x, scene.render.resolution_y = manifest['width'], manifest['height']
+    scene.render.resolution_x = manifest.get('original_width', manifest['width'])
+    scene.render.resolution_y = manifest.get('original_height', manifest['height'])
     scene.render.resolution_percentage = 100
     K = arrays['K']
     ratio = K[:, 0, 0]/K[:, 1, 1]
@@ -211,42 +267,71 @@ def import_bundle(path, start=1001, include_mesh=True, video='', scene=None, cam
     scene.render.pixel_aspect_y = float(ratio[0])
     scene.unit_settings.system = 'METRIC'
     scene.unit_settings.scale_length = 1.
-    cameras = [make_camera(children['cameras'], 'GVHMR World Camera', arrays['camera_to_world'], K, manifest['width'], manifest['height'], start)]
-    cameras[0]['mocap_camera_role'] = 'WORLD'
-    cameras[0]['description'] = 'Native inferred GVHMR camera. Hybrid actor placement may change the video alignment.'
-    if 'actor_camera_to_world' in arrays:
-        cameras.append(make_camera(children['cameras'], 'Video Fit Camera', arrays['actor_camera_to_world'], K, manifest['width'], manifest['height'], start))
-        cameras[-1]['mocap_camera_role'] = 'VIDEO'
-        cameras[-1]['description'] = 'Preserves this actor’s SAM projection after hybrid world placement. Actor-specific; not a shared scene matchmove.'
-    scene.camera = cameras[-1] if camera_view == 'VIDEO' else cameras[0]
+    width, height = manifest['width'], manifest['height']
+    known = manifest.get('scene_camera')
+    root = None
+    existing = None
+    if known:
+        # The body lives in the solved camera's parent space; follow later alignment edits of that parent.
+        root = bpy.data.objects.new(f'{shot[:24]} · scene placement', None)
+        children['actor'].objects.link(root)
+        root.empty_display_type = 'ARROWS'
+        root.empty_display_size = .3
+        root['mocap_role'] = 'SCENE_ROOT'
+        root.parent = bpy.data.objects.get(known.get('parent') or '')
+        if root.parent is not None:
+            root.matrix_parent_inverse.identity()
+        root.scale = (1/known.get('world_scale', 1.),)*3
+        existing = bpy.data.objects.get(known.get('name', ''))
+        if existing is not None and existing.type == 'CAMERA':
+            collection['scene_camera'] = existing.name
+            cameras = [existing]
+        else:
+            cameras = [make_camera(children['cameras'], 'Scene Camera (from bundle)', arrays['camera_to_world'], K, width, height, start, root)]
+            cameras[0]['mocap_camera_role'] = 'SCENE'
+            collection['scene_camera'] = cameras[0].name
+        if 'inferred_camera_to_world' in arrays:
+            inferred = make_camera(children['cameras'], 'GVHMR World Camera', arrays['inferred_camera_to_world'], K, width, height, start, root)
+            inferred['mocap_camera_role'] = 'WORLD'
+            inferred['description'] = "GVHMR's own inferred camera, registered into the scene; for comparison only."
+            inferred.hide_set(True)
+        scene.camera = cameras[0]
+    else:
+        cameras = [make_camera(children['cameras'], 'GVHMR World Camera', arrays['camera_to_world'], K, width, height, start)]
+        cameras[0]['mocap_camera_role'] = 'WORLD'
+        cameras[0]['description'] = 'Native inferred GVHMR camera. Hybrid actor placement may change the video alignment.'
+        if 'actor_camera_to_world' in arrays:
+            cameras.append(make_camera(children['cameras'], 'Video Fit Camera', arrays['actor_camera_to_world'], K, width, height, start))
+            cameras[-1]['mocap_camera_role'] = 'VIDEO'
+            cameras[-1]['description'] = 'Preserves this actor’s SAM projection after hybrid world placement. Actor-specific; not a shared scene matchmove.'
+        scene.camera = cameras[-1] if camera_view == 'VIDEO' else cameras[0]
     for camera in cameras:
+        if camera is existing:
+            continue
         camera.data.display_size = .15
-        camera.hide_set(False)
-    if video and Path(video).is_file():
-        clip = bpy.data.movieclips.load(str(Path(video).resolve()), check_existing=False)
-        clip.frame_start = start-manifest['source_start_frame']
-        for camera in cameras:
-            bg = camera.data.background_images.new()
-            bg.source = 'MOVIE_CLIP'
-            bg.clip = clip
-            bg.frame_method = 'STRETCH'
-            bg.alpha = .65
-            camera.data.show_background_images = True
+        if camera.name in scene.objects:
+            camera.hide_set(False)
+        if video and Path(video).is_file():
+            add_background(camera, video, start, manifest['source_start_frame'], n)
     arm = None
     if include_rig and 'rig_pose' in arrays:
         arm = create_armature(children['actor'], shot+' · '+manifest['track_id']+' · Rig', arrays, Y_UP_TO_Z_UP, start)
+        arm.parent = root
     if include_mesh:
         vertices = arrays['rig_vertices'] if arm else arrays['vertices_world']
         editable_face = arm is not None and 'flame_expressions' in arrays
         mesh = mesh_cache(children['actor'], shot+' · Body', vertices @ Y_UP_TO_Z_UP.T, arrays['faces'], start, relative=editable_face)
         if arm:
             bind_mesh(mesh, arm, arrays)
+        else:
+            mesh.parent = root
         if editable_face:
             from .face import add_expression_keys
             add_expression_keys(mesh, arm, arrays, Y_UP_TO_Z_UP, start)
     collection['editable_face'] = bool(include_mesh and arm is not None and 'flame_expressions' in arrays)
     collection['editable_rig'] = arm is not None
     collection['rig_note'] = 'Native bones with captured surface correctives' if arm else 'Cache only; submit a new job to obtain native bones' if include_rig else 'Rig import disabled'
+    collection['summary'] = json.dumps(dict(lines=summary_lines(manifest, start, collection.get('scene_camera'))+[collection['rig_note']]))
     scene.frame_set(start)
     if arm:
         for obj in bpy.context.selected_objects:
