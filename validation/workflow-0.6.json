@@ -1,0 +1,169 @@
+{
+  "date": "2026-10-21",
+  "addon_version": "0.6.0",
+  "blender": "4.4.0 Linux",
+  "gpu": "Quadro RTX 5000 16 GB",
+  "windows_validated": false,
+  "timings_worker_seconds": {
+    "barnab_moving_137f_hybrid": {
+      "before": {
+        "prepare_seconds": 42.3,
+        "gvhmr_seconds": 76.5,
+        "sam_seconds": 143.2,
+        "export_seconds": 7.6,
+        "worker_total_seconds": 269.5
+      },
+      "after_cold": {
+        "prepare_seconds": 11.3,
+        "gvhmr_seconds": 65.1,
+        "sam_seconds": 136.6,
+        "export_seconds": 7.8,
+        "worker_total_seconds": 220.9
+      }
+    },
+    "karoshi090_68f_hybrid": {
+      "before": {
+        "prepare_seconds": 23.1,
+        "gvhmr_seconds": 42.3,
+        "sam_seconds": 76.6,
+        "export_seconds": 3.8,
+        "worker_total_seconds": 145.9
+      },
+      "warm_first_job_including_server_start": {
+        "prepare_seconds": 11.5,
+        "gvhmr_seconds": 55.0,
+        "sam_seconds": 81.4,
+        "export_seconds": 4.6,
+        "worker_total_seconds": 152.8
+      },
+      "warm_second_job": {
+        "prepare_seconds": 11.1,
+        "gvhmr_seconds": 30.5,
+        "sam_seconds": 62.9,
+        "export_seconds": 3.7,
+        "worker_total_seconds": 108.3
+      }
+    }
+  },
+  "intermediate_video_psnr_db": {
+    "h264_444_crf10": 45.91,
+    "opencv_mp4v": 39.3,
+    "clip": "karoshi090 40 frames"
+  },
+  "import_parity": {
+    "max_vertex_diff_m": 0.0,
+    "max_camera_diff": 0.0,
+    "import_seconds_barnab": {
+      "before": 3.52,
+      "after": 1.55
+    }
+  },
+  "run_to_run": {
+    "karoshi_warm1_vs_warm2_image_px_mean": 0.04,
+    "world_m_mean": 0.003
+  },
+  "before_vs_after_inputs": {
+    "note": "Differences come from the cleaner intermediate video and GPU detection; no ground truth decides which is more accurate.",
+    "barnab_image_px_mean": 0.8,
+    "barnab_world_after_rigid_alignment_m": 0.12,
+    "barnab_world_heading_deg": 28.3,
+    "karoshi_actor_fit_image_px_mean": 5.2
+  },
+  "scene_camera_registration_known_answer": {
+    "rotation_error_deg": 0.073,
+    "translation_error_m": 0.0116,
+    "depth_noise": "3% per frame plus 5 corrupted frames",
+    "lock_depth_change_m": 1.8e-15
+  },
+  "vipe_handoff_barnab_moving": {
+    "vipe_job": "3932ef02",
+    "frames": 137,
+    "plate_error_px": {
+      "mean_px": 5.415027207062484,
+      "p95_px": 12.761378285047762,
+      "max_px": 20.97080112375284
+    },
+    "plate_error_before_lock_px": {
+      "mean_px": 73.33513251712577,
+      "p95_px": 171.10571921404144,
+      "max_px": 215.68077622775255
+    },
+    "registration": {
+      "residual_median_m": 0.2595696323521422,
+      "residual_p95_m": 0.7841082444326034,
+      "downweighted_frames": 9,
+      "scale_estimate": 1.1798966157075308
+    },
+    "gravity_tilt_degrees": 9.932817693645026,
+    "plate_lock": {
+      "strength": 1.0,
+      "smoothing_frames": 3.0,
+      "max_offset_m": 0.7247951690562939,
+      "mean_offset_m": 0.26735760194928976
+    },
+    "blender_vs_worker_projection_max_px": 5.476478395394224e-05,
+    "mesh_vs_bundle_max_m": 2.3841858052264797e-06,
+    "projection_change_after_alignment_edit_px": 0.00012874603271484375,
+    "nuke_files": [
+      "barnab_moving_person_001_mocap.nk",
+      "barnab_moving_person_001_camera.chan",
+      "barnab_moving_person_001_body.abc",
+      "README.txt"
+    ]
+  },
+  "lock_tuning_barnab_hybrid": {
+    "metric_note": "hip acceleration RMS m/s^2, median ankle speed in low-foot frames m/s; proxies without ground truth",
+    "no_lock": {
+      "plate_px": 70.5,
+      "hip_acc": 6.9,
+      "foot": 0.324
+    },
+    "lock_s1_5": {
+      "plate_px": 7.1,
+      "hip_acc": 7.71,
+      "foot": 0.305
+    },
+    "lock_s3": {
+      "plate_px": 7.6,
+      "hip_acc": 7.19,
+      "foot": 0.323
+    },
+    "lock_s3_rotation_0_5": {
+      "plate_px": 5.4,
+      "hip_acc": 7.19,
+      "foot": 0.322,
+      "root_ang_acc": 1209
+    },
+    "lock_s3_rotation_1": {
+      "plate_px": 4.1,
+      "hip_acc": 7.19,
+      "foot": 0.347,
+      "root_ang_acc": 1182
+    },
+    "gvhmr_body_no_lock_foot": 0.125,
+    "gvhmr_body_lock_s3_rotation_0_5": {
+      "plate_px": 5.7,
+      "foot": 0.198
+    },
+    "contact_aware_lock": "tried; no foot-slide gain, removed"
+  },
+  "image_sequence_flow": {
+    "plate": "24-frame linear Rec.709 EXR 1918x1432, frames 1001-1024",
+    "detect_seconds": 10.2,
+    "actors": 3,
+    "job_seconds": 58.7,
+    "state": "IMPORTED",
+    "timeline": [
+      1001,
+      1024
+    ],
+    "background": "IMAGE"
+  },
+  "regression": {
+    "blender_validate": "pass",
+    "reject_invalid": "pass",
+    "flame_editing": "pass (same errors as 0.5.0)",
+    "face_controls": "pass",
+    "addon_register": "pass"
+  }
+}

@@ -46,3 +46,20 @@ Use the `leob03` GitHub identity for this repository. Authentication belongs in 
 Run `production_bridge/tests/blender_face_controls.py` in Blender with an editable `.mocap.zip` or the demo `.blend`, followed by an output JSON path. The check covers ten expression handles under head/object transforms, analytic skinning derivatives against actual Blender evaluation, body/collar isolation, pose edits, key/restore and native reload with the add-on disabled.
 
 Also test real mouse interaction in a separate graphical Blender window: drag, auto-key and scrub, Ctrl Z, Esc cancellation, jaw/eye widgets and close-up/previous-view navigation. Headless geometry checks alone do not exercise gizmo picking or modal Undo. The development workstation should run only one test Blender process at a time.
+
+## Workflow 0.6.0 checks
+
+Without models or GPU:
+
+```bash
+/path/to/worker/python production_bridge/tests/scene_camera_known_answer.py production_bridge any_result.mocap.zip
+```
+
+With a running worker (one GPU job at a time) and Blender's add-on folder containing `mocap_comfy` (and `vipe_remote` for the hand-off):
+
+```bash
+blender -b --factory-startup --python-exit-code 1 --python production_bridge/tests/blender_addon_flow.py -- plate.1001.exr OUT http://127.0.0.1:8188 QUICK "Linear Rec.709"
+blender -b --factory-startup --python-exit-code 1 --python production_bridge/tests/blender_vipe_handoff.py -- vipe_result.zip plate.mp4 OUT http://127.0.0.1:8188 [existing.mocap.zip]
+```
+
+Set `MOCAP_DEBUG_KEEP=DIR` on the worker to keep a job's intermediates, then tune export options without inference: `offline_export.py DIR/<job> '{"variant": {"plate_lock_smoothing": 6}}'`. `motion_quality.py` prints jitter and foot-sliding proxies for result bundles.

@@ -49,3 +49,17 @@ The final export was rebuilt from the retained predictions to align facial/body 
 Ten expression handles were tested at two frames on each of the two retained captures, including an edited head pose and a scaled/rotated character. Requested 3 mm movements were followed within 0.030 mm. Body and protected-collar changes were zero; the largest RMS change at sampled regions more than 45 mm from the handle was 0.205 mm. These anchors are soft, so a control is not perfectly isolated. Solver preparation took at most 0.25 s on the development workstation; subsequent drag updates reuse its small matrix.
 
 Actual mouse tests in graphical Blender 4.4 passed: expression dragging, automatic keying and scrubbing, one-step Ctrl Z, Esc cancellation, jaw open/close, eye aiming and previous-view restoration. Saved corrected meshes replayed with the add-on disabled within 8e-9 m. Full measurements are in [flame-visual-controls.json](../validation/flame-visual-controls.json). This is a local UI/deformation prototype, without an inference rerun or Windows validation.
+
+## Workflow and scene camera 0.6.0
+
+Measured on the same workstation (Quadro RTX 5000, Blender 4.4 Linux); full numbers in [workflow-0.6.json](../validation/workflow-0.6.json). These are timing, consistency and proxy measurements, not ground-truth motion accuracy.
+
+- **Worker time:** barnab_moving, 137 frames, hybrid: 270 s → 221 s (actor detection 42 s → 11 s). karoshi090, 68 frames: 146 s before; 108 s for a repeated job with warm models (model setup 0 s). The first warm job pays about 6 s per model to start its server.
+- **Intermediate video:** 45.9 dB PSNR instead of 39.3 dB. Results move slightly with the cleaner input (0.8 px mean on barnab; 5 px on karoshi's actor-fit projection); two runs of the new pipeline agree within 0.04 px.
+- **Import:** identical geometry and cameras to 0.5.0 (0.0 difference), 1.5–2.3× faster.
+- **Scene camera, known answer:** a camera moved by a known rigid transform, with 3 % per-frame depth noise and corrupted frames, is recovered within 0.07° and 1.2 cm; plate lock changes camera depth by 0.
+- **ViPE hand-off (barnab_moving, real ViPE solve, real job):** plate error 5.4 px mean / 12.8 px p95 at 720×960 (73 px before the lock). Blender's placement matches the worker within 0.0001 px; the body follows edits of the ViPE alignment parent exactly; the Nuke export writes .nk, .chan (137 rows) and the body Alembic. GVHMR's world drifted about 27 cm sideways relative to the solved camera on this shot; the lock removes this at the cost of some foot sliding on the GVHMR body (0.13 → 0.20 m/s median ankle speed in contact frames). Plate lock 0 keeps GVHMR's feet.
+- **Image sequence:** a 24-frame linear EXR sequence ran through the real add-on operators (probe, Detect Actors, proxy upload, job, auto-import on frames 1001–1024 with a proxy background).
+- **Regression:** existing synthetic/import, invalid-bundle, FLAME editing and face-control tests pass unchanged.
+
+Not yet validated: Windows, the `.nk` in Nuke, scene-camera jobs with face capture, multi-actor shared scenes beyond running one job per actor with the same camera, long shots with warm models on production GPUs.

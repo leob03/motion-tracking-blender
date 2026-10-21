@@ -1,12 +1,12 @@
 {
-  "date": "2026-10-20",
-  "addon_version": "0.5.0",
-  "note": "Current source hashes including native FLAME editing and viewport controls. Original preserved snapshot remains at Git tag v0.3.1; model assets and generated results are excluded.",
+  "date": "2026-10-21",
+  "addon_version": "0.6.0",
+  "note": "Current source hashes for 0.6.0 (image sequences, scene camera, warm models, Nuke export). Original preserved snapshot remains at Git tag v0.3.1; model assets and generated results are excluded.",
   "files": [
     {
       "path": "production_bridge/worker.py",
-      "sha256": "127c8996e38fe5bc34250345b6cbf75b69c05eff79d6d576c1b828def14e3960",
-      "bytes": 15767
+      "sha256": "54e4c85c9bfbf4439a1e819cb2b4db2bddd3fa61faa4bcc955876a9883fcf2be",
+      "bytes": 28767
     },
     {
       "path": "production_bridge/face_worker.py",
@@ -40,28 +40,28 @@
     },
     {
       "path": "production_bridge/package_addon.py",
-      "sha256": "98982d5ac3f4c4f45caaee9966a038746c035321a3cd52a76071d548c6051b3d",
-      "bytes": 521
+      "sha256": "07a863774f8c413a0e907231c28200c24d3564923b6fe813d3350c2029ff50ae",
+      "bytes": 608
     },
     {
       "path": "production_bridge/mocap_comfy/__init__.py",
-      "sha256": "419990a2f02f7beb57d00455e7e19c7486875228afc7724790fbdb52497557b6",
-      "bytes": 23401
+      "sha256": "0312a9d96986d7c3681bfffa469b1db3fafd99d8581b6dc5ab8bde85e37b2d14",
+      "bytes": 58917
     },
     {
       "path": "production_bridge/mocap_comfy/client.py",
-      "sha256": "c79386d6d8f895cfeeabc20eb57b935b7fc6fe5ba90072529f699b686da0b8c2",
-      "bytes": 9399
+      "sha256": "7466a759bf20c4852e40e231530e32d2bad7250b0634046071f8e32874ff0da7",
+      "bytes": 12277
     },
     {
       "path": "production_bridge/mocap_comfy/importer.py",
-      "sha256": "115bd501a33c49b07e72a866162c5ff3cb9d0276071bfb5677efb4996d7f71b9",
-      "bytes": 13997
+      "sha256": "0965abb69d222280d8cb626498ef7e6f42f5271632f3667354394e6e5b344b61",
+      "bytes": 19302
     },
     {
       "path": "production_bridge/mocap_comfy/rig.py",
-      "sha256": "6fc1011030f9429215ac86cb997351b315e8437479c20a9de8b48fd6f6debf76",
-      "bytes": 4743
+      "sha256": "c0209e0c4c4733bf5e52f1dbac7ad46683e9e76c9b523614c078d8be9bc60043",
+      "bytes": 4881
     },
     {
       "path": "production_bridge/mocap_comfy/log_view.py",
@@ -70,18 +70,18 @@
     },
     {
       "path": "production_bridge/comfy_nodes/__init__.py",
-      "sha256": "075b160000669dad052b67daabe995a5f0248dbede2f0ae20b3adc2964ccd4c7",
-      "bytes": 8686
+      "sha256": "bfb3328d78660ce0e158f4a35443231bfd8f67ec5252299528030146d6215687",
+      "bytes": 10123
     },
     {
       "path": "production_bridge/comfy_nodes/progress_api.py",
-      "sha256": "1c333d76c6d3f4ec71dfda0eb7d3e8feacfd9d3e6b78b84962b7d3351f3f99ed",
-      "bytes": 2395
+      "sha256": "3519c41e755f996bcca84461fce68c954cb7d29736b760d182676e1d26b2606d",
+      "bytes": 5175
     },
     {
       "path": "comparison_study/run_model.py",
-      "sha256": "a98d42ece9d84232b3afdc2431f778d59ea69787c4464111dbcd9a7005aff7c6",
-      "bytes": 12427
+      "sha256": "7eb24848db3b0cff67de0dcfb19d273fd0ed1f6f1c091c191857a5399e0f445b",
+      "bytes": 19285
     },
     {
       "path": "comparison_study/character_selection.py",
@@ -135,8 +135,8 @@
     },
     {
       "path": "production_bridge/mocap_comfy/face.py",
-      "sha256": "a89725fc5448f88d728fb22fd9f51a06888a44929a3de574e64b3cbb43c31575",
-      "bytes": 7613
+      "sha256": "297b021b788a6818adf6e05c5a655df8abfbb2bffd4cfa6b6ba0ad1c51abdffc",
+      "bytes": 7456
     },
     {
       "path": "production_bridge/tests/make_flame_reference.py",
@@ -155,13 +155,68 @@
     },
     {
       "path": "production_bridge/mocap_comfy/face_controls.py",
-      "bytes": 19325,
-      "sha256": "b631e0cfdf15a349148824d1e5cb976de39049bea4d39e08f7d0b80fab9c4e65"
+      "sha256": "b631e0cfdf15a349148824d1e5cb976de39049bea4d39e08f7d0b80fab9c4e65",
+      "bytes": 19325
     },
     {
       "path": "production_bridge/tests/blender_face_controls.py",
-      "bytes": 5683,
-      "sha256": "255d4f7cd1778611877008ffabedaa52636e7fdbca30c05aed41a9ee56452132"
+      "sha256": "255d4f7cd1778611877008ffabedaa52636e7fdbca30c05aed41a9ee56452132",
+      "bytes": 5683
+    },
+    {
+      "path": "production_bridge/media.py",
+      "sha256": "2fc9255378f06d25957f6ca8c636fa692f6935b1ebdfc250b92c3da5450ae733",
+      "bytes": 3929
+    },
+    {
+      "path": "production_bridge/scene_camera.py",
+      "sha256": "d2b38071423652a18e2af96b30672c350626b20697d14fff15f0cd88e3724a08",
+      "bytes": 4911
+    },
+    {
+      "path": "production_bridge/mocap_comfy/keys.py",
+      "sha256": "5e085c674d4c50c1754e27015633d0f65f98aa577679b1fee418d8ff1709c00c",
+      "bytes": 1942
+    },
+    {
+      "path": "production_bridge/mocap_comfy/plate_proxy.py",
+      "sha256": "47d0e96c391100087dca8fc46d3362e11a9cd8a1b07534f1cf6971c0d023dd6d",
+      "bytes": 8672
+    },
+    {
+      "path": "production_bridge/mocap_comfy/scene_camera.py",
+      "sha256": "8db6baeeffbb39b74753b843aa5feea1202f71ceb1bf9201b6b5950b27c90570",
+      "bytes": 4189
+    },
+    {
+      "path": "production_bridge/mocap_comfy/nuke_export.py",
+      "sha256": "1651e6dc5de303c79e78cbf634a42433de8a5664216e7ae852e5c3727e241c10",
+      "bytes": 12900
+    },
+    {
+      "path": "production_bridge/tests/scene_camera_known_answer.py",
+      "sha256": "ec33f0bb2a8a01def8f40d68dea0cd5e3e54044318934cf507529e8dcf247768",
+      "bytes": 1688
+    },
+    {
+      "path": "production_bridge/tests/blender_vipe_handoff.py",
+      "sha256": "d37001cfddfa53982c1204ef92ef9b17058c8d88771032bf4b05bd6a466f19bd",
+      "bytes": 5489
+    },
+    {
+      "path": "production_bridge/tests/blender_addon_flow.py",
+      "sha256": "15ac5225510cbfc86e68522a1879f2637f9d2003a542069129487de4615b9302",
+      "bytes": 2674
+    },
+    {
+      "path": "production_bridge/tests/motion_quality.py",
+      "sha256": "3879910225b9a029d518febfa987e21e5a9608536203982732365a5039d12a83",
+      "bytes": 1223
+    },
+    {
+      "path": "production_bridge/tests/offline_export.py",
+      "sha256": "267ab7281c551ac7ae31986ee02f0578fa262359c5e61ceaf2253493d75cfaeb",
+      "bytes": 2369
     }
   ]
 }
