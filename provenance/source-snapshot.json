@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "production_bridge/worker.py",
-      "sha256": "54e4c85c9bfbf4439a1e819cb2b4db2bddd3fa61faa4bcc955876a9883fcf2be",
-      "bytes": 28767
+      "sha256": "3bcb1b666ed4bdab38b46ca33c4258b579ee5cdbf3e7156d173e94b1d31bafb4",
+      "bytes": 29103
     },
     {
       "path": "production_bridge/face_worker.py",

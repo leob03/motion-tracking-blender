@@ -160,7 +160,10 @@ def prepare(root, source, options, study, camera_file=None):
     for i, found in enumerate(observed[:, index]):
         gap = 0 if found else gap + 1
         if gap > 12:
-            raise ValueError(f'Actor lost near source frame {options["start_frame"]+i}; shorten the range or change the initial actor')
+            # Name the frame as the artist sees it: plate file number for sequences, 1-based for movies.
+            lost = (plate.plate['first_frame'] if plate.plate else 1)+options['start_frame']+i-gap+1
+            raise ValueError(f'Actor {index} lost from plate frame {lost} (no matching person for {gap} frames): occlusion, leaving the frame '
+                             'or fast motion. Shorten the range, or pick the actor with Detect Actors after that point.')
     boxes[:, [0, 2]] = np.clip(boxes[:, [0, 2]], 0, w - 1)
     boxes[:, [1, 3]] = np.clip(boxes[:, [1, 3]], 0, h - 1)
     if np.any(boxes[:, 2:] <= boxes[:, :2]):
