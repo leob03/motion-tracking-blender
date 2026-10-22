@@ -1,5 +1,5 @@
 bl_info = {
-    'name': 'Mocap ComfyUI', 'author': 'Innovation', 'version': (0, 6, 0),
+    'name': 'Mocap ComfyUI', 'author': 'Innovation', 'version': (0, 6, 1),
     'blender': (4, 2, 0), 'location': '3D View > Sidebar > Mocap',
     'description': 'Submit footage to ComfyUI and import editable body rigs, mesh, and cameras',
     'category': 'Animation',
@@ -8,6 +8,7 @@ bl_info = {
 from pathlib import Path
 import base64
 import json
+import os
 import queue
 import re
 import tempfile
@@ -100,10 +101,48 @@ def face_visual_changed(settings, context):
         context.space_data.show_gizmo_context = True
 
 
+def plate_file(value):
+    """Absolute plate path with '..' collapsed the way Blender resolves '//' paths.
+
+    Blender makes paths relative lexically (from the .blend path as opened), while the OS resolves
+    '..' physically: behind a symlinked folder such as ~/dev-lbringer -> /mnt/share/dev-lbringer,
+    the raw path would leave the tree and point at nothing.
+    """
+    return os.path.normpath(bpy.path.abspath(value)) if value else ''
+
+
+# EXR chromaticities (rx, ry, gx, gy, bx, by) of the colour spaces offered for proxies.
+PRIMARIES = {'ACEScg': (.713, .293, .165, .830, .128, .044), 'ACES2065-1': (.7347, .2653, 0., 1., .0001, -.077),
+             'Linear Rec.709': (.64, .33, .30, .60, .15, .06), 'Linear Rec.2020': (.708, .292, .170, .797, .131, .046)}
+
+
+def declared_colorspace(path):
+    """Colour space from the EXR's declared primaries, or None (OIIO's 'oiio:ColorSpace' is only a guess)."""
+    if Path(path).suffix.lower() != '.exr':
+        return None
+    try:
+        import OpenImageIO as oiio
+        image = oiio.ImageInput.open(str(path))
+        if image is None:
+            return None
+        try:
+            chromaticities = image.spec().getattribute('chromaticities')
+        finally:
+            image.close()
+    except Exception:
+        return None
+    if not chromaticities or len(chromaticities) < 6:
+        return None
+    return next((name for name, primaries in PRIMARIES.items() if max(abs(a-b) for a, b in zip(chromaticities[:6], primaries)) < .005), None)
+
+
 def probe_plate(settings, context):
     """Header-only description of the chosen video or image sequence; no pixels are read."""
+    if settings.video and settings.video != plate_file(settings.video):
+        settings.video = plate_file(settings.video)  # store absolute; this update runs again
+        return
     settings.detect_json = ''
-    path = Path(bpy.path.abspath(settings.video)) if settings.video else None
+    path = Path(settings.video) if settings.video else None
     if path is None or not path.is_file():
         settings.plate_info = json.dumps({'error': 'File not found'} if settings.video else {})
         return
@@ -114,9 +153,12 @@ def probe_plate(settings, context):
             settings.plate_info = json.dumps({'error': f'Cannot read this image sequence: {exc}'})
             return
         fps = seq['fps'][0]/seq['fps'][1] if seq['fps'] else None
+        declared = declared_colorspace(path)
+        if declared:
+            settings.plate_colorspace = declared
         settings.plate_info = json.dumps(dict(sequence=True, width=seq['width'], height=seq['height'], frames=seq['count'], fps=fps,
                                               fps_rational=list(seq['fps']) if seq['fps'] else None, first=seq['first'], last=seq['last'],
-                                              pattern=seq['pattern'], gaps=seq['gaps'], pixel_aspect=seq['pixel_aspect']))
+                                              pattern=seq['pattern'], gaps=seq['gaps'], pixel_aspect=seq['pixel_aspect'], declared_colorspace=declared))
         settings.first_frame, settings.last_frame = seq['first'], seq['last']
         return
     if path.suffix.lower() not in VIDEO_SUFFIXES:
@@ -247,6 +289,9 @@ def timeline_start(settings, sel):
         timing = scene_camera.vipe_timing(settings.scene_camera)
         if timing and not sel['sequence']:
             return timing['zero_frame']+sel['start_index']
+        if timing and timing['plate_first_frame'] is not None:
+            # ViPE stores the file number of its source frame 0; map plate numbers through it.
+            return timing['zero_frame']+sel['first']-timing['plate_first_frame']
     if sel['sequence']:
         return sel['first']
     return settings.frame_start
@@ -280,9 +325,12 @@ def camera_check(settings, sel):
 
 # ---------------------------------------------------------------- jobs
 
+def cache_root():
+    return Path(plate_file(prefs().cache_dir) if prefs().cache_dir else bpy.utils.user_resource('DATAFILES', path='mocap_comfy', create=True))
+
+
 def job_folder(key):
-    root = bpy.path.abspath(prefs().cache_dir) if prefs().cache_dir else bpy.utils.user_resource('DATAFILES', path='mocap_comfy', create=True)
-    folder = Path(root)/key
+    folder = cache_root()/key
     folder.mkdir(parents=True, exist_ok=True)
     return folder
 
@@ -376,7 +424,7 @@ def submit_options(settings, sel):
 
 
 def detect_key(settings, sel):
-    return f"{bpy.path.abspath(settings.video)}|{sel['first']}|{settings.max_side}|{settings.plate_colorspace if sel['sequence'] else ''}"
+    return f"{plate_file(settings.video)}|{sel['first']}|{settings.max_side}|{settings.plate_colorspace if sel['sequence'] else ''}"
 
 
 def plate_fps(settings):
@@ -387,15 +435,33 @@ def plate_fps(settings):
     return (round(fps*1000), 1000)
 
 
+def ocio_config():
+    """Blender's bundled OCIO config, so proxies never depend on $OCIO or the launch environment."""
+    return os.path.join(bpy.utils.resource_path('LOCAL'), 'datafiles', 'colormanagement', 'config.ocio')
+
+
+def sequence_proxy(video, cache_root, snapshot, progress=lambda *args: None, stop=lambda: False):
+    """Proxy archive for a sequence selection, cached by the selected files and proxy settings.
+
+    Rebuilt proxies are byte-identical, so the worker also recognises the upload.
+    """
+    options = dict(first_index=snapshot['first_index'], last_index=snapshot['last_index'], long_edge=snapshot['max_side'],
+                   colorspace=snapshot['colorspace'], fps=snapshot['fps'])
+    cache = Path(cache_root)/'proxies'/plate_proxy.proxy_key(video, **options)
+    found = plate_proxy.cached_proxy(cache)
+    if found:
+        progress('Plate proxy reused', 1.)
+        return found
+    return plate_proxy.build_proxy(video, cache, ocio_config=snapshot['ocio_config'], progress=progress, stop=stop, **options)
+
+
 def build_upload(run, settings_snapshot, progress):
     """Movie path, or the proxy ZIP of an image-sequence selection (built on the artist machine)."""
     record = run['record']
     if not record['sequence']:
         return record['video']
-    archive, plate_json, first = plate_proxy.build_proxy(record['video'], Path(record['folder']), first_index=settings_snapshot['first_index'],
-                                                         last_index=settings_snapshot['last_index'], long_edge=settings_snapshot['max_side'],
-                                                         colorspace=settings_snapshot['colorspace'], fps=settings_snapshot['fps'],
-                                                         progress=lambda stage, fraction: progress(dict(stage=stage, done=fraction, total=1.)), stop=run['stop'].is_set)
+    archive, plate_json, first = sequence_proxy(record['video'], Path(record['folder']).parent, settings_snapshot,
+                                                lambda stage, fraction: progress(dict(stage=stage, done=fraction, total=1.)), run['stop'].is_set)
     record['background'] = str(first)
     record['plate'] = plate_json
     run['events'].put(('record', record))
@@ -416,7 +482,7 @@ def begin_submit(context):
             raise ValueError(issues[0])
         camera_json = scene_camera.sample(context, settings.scene_camera, list(range(start, start+sel['count'])), info['width'], info['height'])
     options = submit_options(settings, sel)
-    video = bpy.path.abspath(settings.video)
+    video = plate_file(settings.video)
     label = f"{Path(video).stem[:20]} · {sel['first']}–{sel['last']} · {settings.preset.replace('_', ' ').lower()}"
     record = dict(video=video, sequence=sel['sequence'], timeline_start=start, first=sel['first'], count=sel['count'],
                   include_mesh=settings.include_mesh, include_rig=settings.include_rig, auto_import=settings.auto_import,
@@ -430,7 +496,7 @@ def begin_submit(context):
         camera_file = Path(record['folder'])/'scene_camera.json'
         camera_file.write_text(json.dumps(camera_json))
     snapshot = dict(first_index=sel['start_index']+1, last_index=sel['start_index']+sel['count'], max_side=settings.max_side,
-                    colorspace=settings.plate_colorspace, fps=plate_fps(settings))
+                    colorspace=settings.plate_colorspace, fps=plate_fps(settings), ocio_config=ocio_config())
 
     def work(run):
         client = run['client']
@@ -601,19 +667,19 @@ class MOCAP_OT_detect(Operator):
         except ValueError as exc:
             self.report({'ERROR'}, str(exc))
             return {'CANCELLED'}
-        video, key, scene_name = bpy.path.abspath(settings.video), detect_key(settings, sel), context.scene.name
+        video, key, scene_name = plate_file(settings.video), detect_key(settings, sel), context.scene.name
         # A two-frame proxy (the archive minimum) at the job's processing size gives identical boxes.
         snapshot = dict(first_index=sel['start_index']+1, last_index=sel['start_index']+2, max_side=settings.max_side,
-                        colorspace=settings.plate_colorspace, fps=plate_fps(settings), fps_override=settings.fps_override)
+                        colorspace=settings.plate_colorspace, fps=plate_fps(settings), fps_override=settings.fps_override, ocio_config=ocio_config(),
+                        cache_root=str(cache_root()))
         client = ComfyClient(prefs(context).endpoint, prefs(context).token)
         _detect = dict(scene=scene_name, events=queue.Queue(), detail='Uploading the plate')
 
         def work():
             try:
                 if sel['sequence']:
-                    folder = Path(tempfile.mkdtemp(prefix='mocap-detect-'))
-                    path, _, _ = plate_proxy.build_proxy(video, folder, first_index=snapshot['first_index'], last_index=snapshot['last_index'],
-                                                         long_edge=snapshot['max_side'], colorspace=snapshot['colorspace'], fps=snapshot['fps'])
+                    _detect['events'].put(('detail', 'Preparing the first frames of the plate'))
+                    path, _, _ = sequence_proxy(video, snapshot['cache_root'], snapshot)
                     frame = 0
                 else:
                     path, frame = video, sel['start_index']
@@ -804,7 +870,7 @@ class MOCAP_OT_import_file(Operator, ImportHelper):
     def execute(self, context):
         settings = context.scene.mocap_comfy
         try:
-            video = bpy.path.abspath(settings.video) if settings.video else ''
+            video = plate_file(settings.video)
             import_bundle(self.filepath, settings.frame_start, settings.include_mesh, video if Path(video).suffix.lower() in VIDEO_SUFFIXES else '',
                           camera_view=settings.camera_view, include_rig=settings.include_rig)
         except Exception as exc:
@@ -887,7 +953,7 @@ class MOCAP_OT_export_nuke(Operator):
     def invoke(self, context, event):
         settings = context.scene.mocap_comfy
         if settings.nuke_dir:
-            self.directory = bpy.path.abspath(settings.nuke_dir)
+            self.directory = plate_file(settings.nuke_dir)
             return self.execute(context)
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
@@ -1046,6 +1112,8 @@ class MOCAP_PT_footage(SubPanel, Panel):
         layout.label(text=text, icon=icon)
         if info.get('sequence'):
             layout.prop(settings, 'plate_colorspace', text='Colour')
+            hint(layout, 'Primaries declared in the EXR header' if info.get('declared_colorspace') == settings.plate_colorspace else
+                 'The files do not declare their primaries: check the plate colour space', width, 'INFO')
         elif settings.camera_mode != 'SCENE':
             layout.prop(settings, 'frame_start')
         layout.separator()

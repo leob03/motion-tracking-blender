@@ -12,7 +12,7 @@ import addon_utils
 addon_utils.enable('mocap_comfy', default_set=True)
 import mocap_comfy as mc
 prefs = bpy.context.preferences.addons['mocap_comfy'].preferences
-prefs.endpoint, prefs.cache_dir = endpoint, str(out/'downloads')
+prefs.endpoint, prefs.cache_dir = endpoint, (args[5] if len(args) > 5 else str(out/'downloads'))
 scene = bpy.context.scene
 s = scene.mocap_comfy
 s.video = plate

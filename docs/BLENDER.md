@@ -2,7 +2,7 @@
 
 ## Install
 
-Build `mocap_comfy-0.6.0.zip` with `python scripts/build_packages.py` (output in `dist/`). Install it through **Edit → Preferences → Add-ons → Install from Disk**, enable **Mocap ComfyUI**, then restart Blender. Blender 4.4.0 on Linux is tested; Windows remains unvalidated.
+Build `mocap_comfy-0.6.1.zip` with `python scripts/build_packages.py` (output in `dist/`). Install it through **Edit → Preferences → Add-ons → Install from Disk**, enable **Mocap ComfyUI**, then restart Blender. Blender 4.4.0 on Linux is tested; Windows remains unvalidated.
 
 The worker URL, optional bearer token and download folder are **add-on preferences** (shared by all scenes; also shown in the **Worker** sub-panel). For a local worker use `http://127.0.0.1:8188`. A remote worker can use the team's approved HTTP(S) endpoint or an SSH tunnel:
 
@@ -53,3 +53,11 @@ Press numpad 0 to review the plate background (movie clip, or the proxy frames f
 ## Jobs, cancellation and resume
 
 **Cancel Job** uses the fork's job-scoped cancellation route. **Resume** reconnects to a submitted job (job ID kept in the scene) without submitting it again. A server restart may remove queue/history, so keep downloaded results. Full received logs are saved with each download.
+
+## Plates, paths and colour (0.6.1)
+
+- The chosen plate is stored as an **absolute** path. Blender's file browser writes paths relative to the .blend; behind a symlinked folder (for example `~/dev-lbringer` → `/mnt/share/dev-lbringer`) such paths pointed at nothing in 0.6.0 ("File not found").
+- Image-sequence proxies use Blender's bundled OCIO config and are **cached** in the download folder (`proxies/`), keyed by the selected files and settings. Rebuilt proxies are byte-identical, so Detect Actors, resubmissions and other actors on the same range reuse the proxy and the upload (30 frames at 4608×3164: 114 s → 51 s for a resubmitted job).
+- The colour space is taken from the EXR header only when the file declares its primaries (`chromaticities`); otherwise the panel says so and the chosen colour space (default ACEScg) is used. OIIO's `oiio:ColorSpace` value is a guess and is ignored.
+- The plate is a movie clip for movies and sequences alike (same mapping as the ViPE add-on; verified for sequences starting at 0977). It is composited under renders and Rendered view (transparent film, Standard view transform), unless the scene already has its own compositor setup. With a ViPE camera, ViPE's plate setup is kept.
+- ViPE sequence timing uses the ViPE job's stored plate frame numbers.

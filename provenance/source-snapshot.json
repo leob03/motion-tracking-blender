@@ -1,6 +1,6 @@
 {
-  "date": "2026-10-21",
-  "addon_version": "0.6.0",
+  "date": "2026-10-22",
+  "addon_version": "0.6.1",
   "note": "Current source hashes for 0.6.0 (image sequences, scene camera, warm models, Nuke export). Original preserved snapshot remains at Git tag v0.3.1; model assets and generated results are excluded.",
   "files": [
     {
@@ -40,13 +40,13 @@
     },
     {
       "path": "production_bridge/package_addon.py",
-      "sha256": "07a863774f8c413a0e907231c28200c24d3564923b6fe813d3350c2029ff50ae",
+      "sha256": "33cb8cedc19071380d4cef4103ae09859aecd55d45ccd339ef3810a2f7c06942",
       "bytes": 608
     },
     {
       "path": "production_bridge/mocap_comfy/__init__.py",
-      "sha256": "0312a9d96986d7c3681bfffa469b1db3fafd99d8581b6dc5ab8bde85e37b2d14",
-      "bytes": 58917
+      "sha256": "ff307a9e0009f7576405cd7c9385d0f8cbd5d0083ece031458d960d35fe68d95",
+      "bytes": 61827
     },
     {
       "path": "production_bridge/mocap_comfy/client.py",
@@ -55,8 +55,8 @@
     },
     {
       "path": "production_bridge/mocap_comfy/importer.py",
-      "sha256": "0965abb69d222280d8cb626498ef7e6f42f5271632f3667354394e6e5b344b61",
-      "bytes": 19302
+      "sha256": "9ea80b1964876d054f21c7dbe7798cfec8979a969d35608f6019d085eb728a4b",
+      "bytes": 21769
     },
     {
       "path": "production_bridge/mocap_comfy/rig.py",
@@ -180,13 +180,13 @@
     },
     {
       "path": "production_bridge/mocap_comfy/plate_proxy.py",
-      "sha256": "47d0e96c391100087dca8fc46d3362e11a9cd8a1b07534f1cf6971c0d023dd6d",
-      "bytes": 8672
+      "sha256": "853085c23083a50bc474cfd185326dedc5695c74140b0e93899ad54daa5727ab",
+      "bytes": 10519
     },
     {
       "path": "production_bridge/mocap_comfy/scene_camera.py",
-      "sha256": "8db6baeeffbb39b74753b843aa5feea1202f71ceb1bf9201b6b5950b27c90570",
-      "bytes": 4189
+      "sha256": "6bb502820592a62b885aedba045804f00d8b0ccd749eb33ccba34d32a8026d0d",
+      "bytes": 4330
     },
     {
       "path": "production_bridge/mocap_comfy/nuke_export.py",
@@ -205,8 +205,8 @@
     },
     {
       "path": "production_bridge/tests/blender_addon_flow.py",
-      "sha256": "15ac5225510cbfc86e68522a1879f2637f9d2003a542069129487de4615b9302",
-      "bytes": 2674
+      "sha256": "ce06a9ed37ad1858dbdbd1cfb077c782f59e2061d3b89594f3f0bf65396dd360",
+      "bytes": 2706
     },
     {
       "path": "production_bridge/tests/motion_quality.py",
@@ -217,6 +217,16 @@
       "path": "production_bridge/tests/offline_export.py",
       "sha256": "267ab7281c551ac7ae31986ee02f0578fa262359c5e61ceaf2253493d75cfaeb",
       "bytes": 2369
+    },
+    {
+      "path": "production_bridge/tests/blender_relative_plate_path.py",
+      "sha256": "c472cbb08b56142f0782bd32bac8cb167e51acd922977f11efd9062246babc35",
+      "bytes": 833
+    },
+    {
+      "path": "production_bridge/tests/blender_plate_mapping.py",
+      "sha256": "7f4472caf424f6126e083de20209f994da5b9dfb23408443c04622412eb67995",
+      "bytes": 1703
     }
   ]
 }
