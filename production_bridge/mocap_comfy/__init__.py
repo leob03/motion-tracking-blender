@@ -1,5 +1,5 @@
 bl_info = {
-    'name': 'Mocap ComfyUI', 'author': 'Innovation', 'version': (0, 6, 2),
+    'name': 'Mocap ComfyUI', 'author': 'Innovation', 'version': (0, 6, 3),
     'blender': (4, 2, 0), 'location': '3D View > Sidebar > Mocap',
     'description': 'Submit footage to ComfyUI and import editable body rigs, mesh, and cameras',
     'category': 'Animation',
@@ -220,6 +220,7 @@ class MocapSettings(PropertyGroup):
     last_frame: IntProperty(name='Last', default=0, min=0, description='Last frame to process (inclusive); 0 = to the end')
     actor_index: IntProperty(name='Actor', default=-1, min=-1, max=1000, description='Actors are numbered 0, 1, 2 from left to right on the pick frame; -1 = largest')
     actor_selection: StringProperty(options={'HIDDEN'}, description='Detected actors to process, one job each')
+    trim_to_actor: BoolProperty(name='Trim to visible actor', default=True, description='If the actor is hidden or outside the image for part of the range, process only the frames where they are visible (the result says which) instead of failing')
     pick_frame: IntProperty(name='Pick on frame', default=0, description='Plate frame where actors are detected and picked (tracked forwards and backwards from it); outside the range = first frame')
     detect_json: StringProperty(options={'HIDDEN'})
     # Processing
@@ -243,6 +244,9 @@ class MocapSettings(PropertyGroup):
     sensor_preset: EnumProperty(name='Filmback', items=[item[:3] for item in SENSOR_PRESETS], default='FULL_FRAME', update=sensor_preset_changed)
     sensor_mm: FloatProperty(name='Sensor width (mm)', default=36., min=.1)
     scene_camera: PointerProperty(name='Scene camera', type=bpy.types.Object, poll=scene_camera_poll)
+    scene_placement: EnumProperty(name='Body placement', items=[('auto', 'Auto', "GVHMR's world motion when it agrees with the solved camera, otherwise follow the plate"),
+                                                               ('world', 'GVHMR world motion', 'Clean world trajectory and foot contacts; for pans, tilts and handheld cameras that travel little'),
+                                                               ('plate', 'Follow the plate', 'On the plate every frame with smoothed depth; for dolly, truck and crane shots')], default='auto')
     plate_lock: FloatProperty(name='Plate lock', default=1., min=0., max=1., subtype='FACTOR', description='Sideways correction (no depth change) keeping the body on the plate under the solved camera')
     orientation_lock: FloatProperty(name='Rotation lock', default=.5, min=0., max=1., subtype='FACTOR', description="Turn the body's root toward the orientation seen in the plate (smoothed); 1 fits the plate best, 0 keeps GVHMR's world orientation")
     plate_lock_smoothing: FloatProperty(name='Lock smoothing (frames)', default=3., min=0., max=12., description='Gaussian smoothing of the plate and rotation locks; higher is steadier, lower follows the plate more closely')
@@ -448,10 +452,13 @@ def submit_options(settings, sel, actor):
                    actor_index=actor, moving_camera=settings.moving_camera, fps_override=settings.fps_override,
                    focal_px=0., max_side=settings.max_side, sam_smoothing=settings.sam_smoothing,
                    hand_refinement=settings.hand_refinement, face_capture=settings.face_capture if settings.method == 'hybrid' else 'none')
+    if not settings.trim_to_actor:
+        options['trim_to_actor'] = False
     if settings.camera_mode == 'FOCAL':
         options['focal_px'] = settings.focal_mm/settings.sensor_mm*plate(settings)['width']
     if settings.camera_mode == 'SCENE':
-        options.update(plate_lock=settings.plate_lock, orientation_lock=settings.orientation_lock, plate_lock_smoothing=settings.plate_lock_smoothing)
+        options.update(scene_placement=settings.scene_placement, plate_lock=settings.plate_lock, orientation_lock=settings.orientation_lock,
+                       plate_lock_smoothing=settings.plate_lock_smoothing)
     if settings.warm_models:
         options['warm_models'] = True
     detected = current_detection(settings, sel)
@@ -1269,6 +1276,7 @@ class MOCAP_PT_footage(SubPanel, Panel):
         else:
             layout.prop(settings, 'actor_index', text='Actor')
             hint(layout, 'Detect Actors shows a close-up of each person on the pick frame. Without it: 0, 1, 2 left to right; -1 = largest.', width)
+        layout.prop(settings, 'trim_to_actor')
 
 
 class MOCAP_PT_camera(SubPanel, Panel):
@@ -1308,11 +1316,15 @@ class MOCAP_PT_camera(SubPanel, Panel):
             column.alert = True
             for line in textwrap.wrap(issue, width):
                 column.label(text=line)
+        layout.prop(settings, 'scene_placement')
         column = layout.column(align=True)
+        column.active = settings.scene_placement != 'plate'
         column.prop(settings, 'plate_lock')
         column.prop(settings, 'orientation_lock')
         column.prop(settings, 'plate_lock_smoothing')
-        hint(layout, "World motion stays GVHMR's. Plate lock slides the body sideways (never in depth); rotation lock turns it toward the plate. Rotation lock 1 fits best on plate-critical shots.", width)
+        hint(layout, "Auto keeps GVHMR's world motion when it agrees with the solved camera (pans, handheld) and follows the plate with smoothed depth "
+                     "when the camera travels (dolly, truck, crane), which GVHMR cannot represent. The locks apply to GVHMR world motion: plate lock slides "
+                     "the body sideways (never in depth), rotation lock turns it toward the plate.", width)
 
 
 class MOCAP_PT_process(SubPanel, Panel):

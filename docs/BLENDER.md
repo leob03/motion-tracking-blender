@@ -2,7 +2,7 @@
 
 ## Install
 
-Build `mocap_comfy-0.6.2.zip` with `python scripts/build_packages.py` (output in `dist/`). Install it through **Edit → Preferences → Add-ons → Install from Disk**, enable **Mocap ComfyUI**, then restart Blender. Blender 4.4.0 on Linux is tested; Windows remains unvalidated.
+Build `mocap_comfy-0.6.3.zip` with `python scripts/build_packages.py` (output in `dist/`). Install it through **Edit → Preferences → Add-ons → Install from Disk**, enable **Mocap ComfyUI**, then restart Blender. Blender 4.4.0 on Linux is tested; Windows remains unvalidated.
 
 The worker URL, optional bearer token and download folder are **add-on preferences** (shared by all scenes; also shown in the **Worker** sub-panel). For a local worker use `http://127.0.0.1:8188`. A remote worker can use the team's approved HTTP(S) endpoint or an SSH tunnel:
 
@@ -69,3 +69,9 @@ Press numpad 0 to review the plate background (movie clip, or the proxy frames f
 - The worker keeps each plate range's prepared intermediate video and per-frame person boxes (`output/mocap/prepared`, last 12 ranges). Another actor of the same range skips decoding, encoding and detection; only that actor's tracking and inference run. With a sequence, the cached proxy and upload are reused as well.
 - If an actor cannot be followed (more than 12 frames without a matching person), the error names the plate frames where they were lost; pick them on a frame near there or shorten the range.
 - Each Submit now always creates and monitors its own job; in 0.6.1 a second submission in the same session could re-attach to the previous job and never reach the worker.
+
+## Crowds, actors leaving the frame and travelling cameras (0.6.3)
+
+- **Actor tracking** was rebuilt for crowded plates: a person's box centre is predicted with a damped velocity and its size is smoothed (a partial detection can no longer collapse the prediction); matches must be near and of plausible size; a person who leaves the image is not searched for elsewhere; short gaps are interpolated.
+- **Trim to visible actor** (on by default): if the picked actor is hidden or outside the image for part of the range, the job processes only the frames where they are visible and the Result panel says so (for example "Trimmed to plate frames 977–1070 of 977–1092"). The import lands on the right timeline frames. It fails only if fewer than 8 frames remain.
+- **Body placement** (solved camera): GVHMR models camera rotation but not camera travel, so on dolly, truck and crane shots its world motion carries the camera's travel. *Auto* checks how well GVHMR's world motion fits the solved camera; when it does not (world fit off by more than 15 % of the subject distance), the body *follows the plate*: on its viewing ray every frame, with the depth smoothed in world space as much as possible while staying within 1 % of the image width of the plate. *GVHMR world motion* and *Follow the plate* can be forced. Example (MWTB SSR-0500, actor 7, camera trucking 7.6 m): plate error 299 px mean before, 1.6 px after.

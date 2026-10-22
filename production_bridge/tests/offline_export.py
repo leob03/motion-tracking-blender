@@ -27,6 +27,6 @@ for name, overrides in variants.items():
     root_rot = Rotation.from_matrix(a['rig_pose'][:, 0, :3, :3]/np.linalg.norm(a['rig_pose'][:, 0, :3, :3], axis=1, keepdims=True))
     omega = (root_rot[1:]*root_rot[:-1].inv()).as_rotvec()*fps
     ang_acc = np.degrees(np.linalg.norm(np.diff(omega, axis=0), axis=1)*fps)
-    print(json.dumps(dict(variant=name, plate_mean_px=round(sc['plate_error_px']['mean_px'], 2), plate_p95_px=round(sc['plate_error_px']['p95_px'], 2),
+    print(json.dumps(dict(variant=name, placement=sc.get('placement'), fit_rel=round(sc.get('world_fit_relative', 0), 3), depth_s=(sc.get('anchored') or {}).get('depth_smoothing_seconds'), plate_mean_px=round(sc['plate_error_px']['mean_px'], 2), plate_p95_px=round(sc['plate_error_px']['p95_px'], 2),
         hip_accel_rms=round(float(np.sqrt((acc**2).mean())), 2), depth_accel_rms=round(float(np.sqrt((dacc**2).mean())), 2),
         foot_slide=round(float(np.median(speed[contact])), 3), root_ang_acc_rms_deg_s2=round(float(np.sqrt((ang_acc**2).mean())), 0), max_offset_m=round(sc['plate_lock']['max_offset_m'], 3))))

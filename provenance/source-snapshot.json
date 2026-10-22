@@ -1,12 +1,12 @@
 {
   "date": "2026-10-22",
-  "addon_version": "0.6.2",
+  "addon_version": "0.6.3",
   "note": "Current source hashes for 0.6.0 (image sequences, scene camera, warm models, Nuke export). Original preserved snapshot remains at Git tag v0.3.1; model assets and generated results are excluded.",
   "files": [
     {
       "path": "production_bridge/worker.py",
-      "sha256": "6709e24f742b25e441b2b8caf788ce61d44375b5d2f0b3200ca6fabb342fb71a",
-      "bytes": 33000
+      "sha256": "0b31277b277d80d7a7afeab9ce5efa2eb1b6346123872fe7d2871205e55b7bae",
+      "bytes": 36965
     },
     {
       "path": "production_bridge/face_worker.py",
@@ -40,13 +40,13 @@
     },
     {
       "path": "production_bridge/package_addon.py",
-      "sha256": "1b930b3bd7b90746da93567036b6210cf88c8ec03f82a3bba2a5651d70961fea",
+      "sha256": "a570b45706f236a12fa22b738c6a4af1e6c2099e80af33bf6d72941fc89da624",
       "bytes": 608
     },
     {
       "path": "production_bridge/mocap_comfy/__init__.py",
-      "sha256": "28a92855b364aff612073c22ce80669383c29732f63a5514fb267c9365c916ad",
-      "bytes": 67924
+      "sha256": "780f567c4d7d7792ba7cbb8ba2ef3ac4de510a95d8476f8af57f8d9b61b57440",
+      "bytes": 69245
     },
     {
       "path": "production_bridge/mocap_comfy/client.py",
@@ -55,8 +55,8 @@
     },
     {
       "path": "production_bridge/mocap_comfy/importer.py",
-      "sha256": "9ea80b1964876d054f21c7dbe7798cfec8979a969d35608f6019d085eb728a4b",
-      "bytes": 21769
+      "sha256": "f7886ec8867b7b2b27ecaee3328db5b877210ab3868f856698ebd3a7e5a81832",
+      "bytes": 23044
     },
     {
       "path": "production_bridge/mocap_comfy/rig.py",
@@ -70,8 +70,8 @@
     },
     {
       "path": "production_bridge/comfy_nodes/__init__.py",
-      "sha256": "765a3ca861d854e66b0eb39d6545be34985b170281c7014c88c0a9339589ade2",
-      "bytes": 10382
+      "sha256": "a6d3afa463929e88f119480688eec7e4ad8fd2c0ccc364756665e493f4e4908b",
+      "bytes": 10702
     },
     {
       "path": "production_bridge/comfy_nodes/progress_api.py",
@@ -170,8 +170,8 @@
     },
     {
       "path": "production_bridge/scene_camera.py",
-      "sha256": "d2b38071423652a18e2af96b30672c350626b20697d14fff15f0cd88e3724a08",
-      "bytes": 4911
+      "sha256": "c682d7f87dce9dda35a0fa79b04e05494e0cb66cef7d87328831c6451874b098",
+      "bytes": 6834
     },
     {
       "path": "production_bridge/mocap_comfy/keys.py",
@@ -215,8 +215,8 @@
     },
     {
       "path": "production_bridge/tests/offline_export.py",
-      "sha256": "267ab7281c551ac7ae31986ee02f0578fa262359c5e61ceaf2253493d75cfaeb",
-      "bytes": 2369
+      "sha256": "38aa7ed0ae4afe75c5309ed5bb781c60a6738817c1858f0f2d26a0281452573f",
+      "bytes": 2518
     },
     {
       "path": "production_bridge/tests/blender_relative_plate_path.py",
@@ -242,6 +242,16 @@
       "path": "production_bridge/tests/blender_job_list.py",
       "sha256": "22d2158a430e8d1c118f81308fa4583111618434ee5b3e5103498b18dc908e4b",
       "bytes": 954
+    },
+    {
+      "path": "production_bridge/tracking.py",
+      "sha256": "5e7f298f6aa4149c5dba01df2e8d7ce61ab35a3fd32534a01fe4a21e2ece484a",
+      "bytes": 5702
+    },
+    {
+      "path": "production_bridge/tests/tracking_reviewed.py",
+      "sha256": "8ddc45a778a32c598354e234282de5cbf91f0e950e637b3b5e0ee9d467b3ec4d",
+      "bytes": 1797
     }
   ]
 }

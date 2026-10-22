@@ -147,3 +147,7 @@ With the job input `warm_models=true`, `worker.py` hands GVHMR and SAM inference
 ### Worker update 0.6.2
 
 `worker.py` and `comfy_nodes/__init__.py` changed: restart ComfyUI. New optional input `seed_frame` (frame of the range where `actor_box` was picked; tracking runs forwards and backwards from it). Prepared plates (intermediate video + per-frame person boxes) are cached in `<ComfyUI output>/mocap/prepared/`, keyed by upload name, range, processing size and FPS override; the 12 most recently used are kept. An older add-on without a pick frame still works (seed 0).
+
+### Worker update 0.6.3
+
+New `production_bridge/tracking.py` (seeded centre/size tracker) replaces `character_selection.track` in the worker; the study helper is unchanged. New optional inputs `trim_to_actor` (default true) and `scene_placement` (`auto`, `world`, `plate`); optional option `depth_smoothing_seconds` (default automatic). Bundles may carry `manifest.trimmed` and `scene_camera.placement`/`anchored`. Restart ComfyUI after deploying.

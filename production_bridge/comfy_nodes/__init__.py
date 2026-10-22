@@ -40,6 +40,8 @@ class MocapProcessVideo:
             'scene_camera': ('STRING', {'default': '', 'tooltip': 'Uploaded scene-camera JSON from the Blender add-on (solved camera)'}),
             'actor_box': ('STRING', {'default': '', 'tooltip': 'Normalized [x1,y1,x2,y2] picked in the actor preview'}),
             'seed_frame': ('INT', {'default': 0, 'min': 0, 'max': 100000, 'tooltip': 'Frame of the range (0 = first) where the actor was picked'}),
+            'scene_placement': (['auto', 'world', 'plate'], {'default': 'auto', 'tooltip': 'Solved camera: GVHMR world motion, or follow the plate (camera travels)'}),
+            'trim_to_actor': ('BOOLEAN', {'default': True, 'tooltip': 'Process only the frames where the picked actor is visible instead of failing'}),
             'plate_lock': ('FLOAT', {'default': 1., 'min': 0., 'max': 1.}),
             'plate_lock_smoothing': ('FLOAT', {'default': 3., 'min': 0., 'max': 12.}),
             'orientation_lock': ('FLOAT', {'default': .5, 'min': 0., 'max': 1.}),

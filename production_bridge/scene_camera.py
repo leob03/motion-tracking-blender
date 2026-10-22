@@ -7,6 +7,11 @@ with ONE rigid transform for the whole shot (robustly fitted). The remaining pla
 removed by a small, smoothed sideways correction parallel to the image plane ("plate lock"):
 depth from the camera is never changed by it.
 
+When the solved camera itself travels (dolly, truck, crane), GVHMR's world motion is unusable:
+GVHMR only knows camera rotation and folds the camera's travel into the body's trajectory. The body is
+then anchored to the plate instead: on its viewing ray every frame, at a distance smoothed in world
+space over about half a second (anchored_offsets), so per-frame depth noise does not become jitter.
+
 Conventions: Y-up metric world, OpenCV camera-to-world matrices, (F, J, 3) joint arrays.
 """
 import numpy as np
@@ -86,6 +91,32 @@ def orientation_lock(world_rotations, camera_rotations, c2w, strength=1., sigma=
     plate = np.einsum('fij,fjk->fik', c2w[:, :3, :3], camera_rotations)
     delta = Rotation.from_matrix(plate@world_rotations.transpose(0, 2, 1)).as_rotvec()
     return Rotation.from_rotvec(strength*gaussian_smooth(delta, sigma)).as_matrix()
+
+
+def anchored_offsets(anchor_camera, c2w, fps, depth_seconds=.5, plate_frames=1.5):
+    """Camera-space offsets moving the anchor along its own viewing ray to a world-smooth distance.
+
+    Minimizes sum (x - p)^T W (x - p) + lam |second difference of x|^2 over world positions x, where p are
+    the camera-derived anchor positions and W trusts the image-plane directions fully and the camera
+    depth weakly; the solution's camera depth is then applied along each frame's original ray, so the
+    anchor stays exactly on the plate.
+    """
+    from scipy.sparse import block_diag, diags, kron, identity
+    from scipy.sparse.linalg import spsolve
+    frames = len(anchor_camera)
+    target = np.einsum('fij,fj->fi', c2w[:, :3, :3], anchor_camera)+c2w[:, :3, 3]
+    if frames < 3:
+        return np.zeros_like(anchor_camera), anchor_camera[:, 2].copy()
+    lam = plate_frames**4
+    depth_weight = lam/max(depth_seconds*fps, 1.)**4
+    weights = [R@np.diag([1., 1., depth_weight])@R.T for R in c2w[:, :3, :3]]
+    second = diags([np.ones(frames-2), -2*np.ones(frames-2), np.ones(frames-2)], [0, 1, 2], shape=(frames-2, frames))
+    system = block_diag(weights, format='csc')+lam*kron(second.T@second, identity(3), format='csc')
+    rhs = np.concatenate([W@x for W, x in zip(weights, target)])
+    smooth = spsolve(system, rhs).reshape(frames, 3)
+    depth = np.einsum('fi,fi->f', smooth-c2w[:, :3, 3], c2w[:, :3, 2])
+    depth = np.maximum(depth, .2)
+    return anchor_camera*(depth/anchor_camera[:, 2]-1)[:, None], depth
 
 
 def plate_error(K, c2w, world_joints, reference_camera_joints):

@@ -181,11 +181,15 @@ def mesh_cache(collection, name, vertices, faces, start, relative=False):
 PLATE_NODES = 'Mocap '
 
 
-def plate_clip(video, start, source_start):
-    """Movie, or numbered image sequence (local proxy frames), as a MovieClip on the job timeline."""
+def plate_clip(video, range_start, start, source_start):
+    """Movie, or numbered image sequence (local proxy frames), as a MovieClip on the job timeline.
+
+    range_start: timeline frame of the requested range's first frame (the proxy's first file);
+    start/source_start: timeline frame and source index of the result's first frame.
+    """
     clip = bpy.data.movieclips.load(str(Path(video).resolve()), check_existing=True)
     # A sequence clip plays its files in order from the loaded number; a movie's frame 1 is source frame 0.
-    clip.frame_start = start if clip.source == 'SEQUENCE' else start-source_start
+    clip.frame_start = range_start if clip.source == 'SEQUENCE' else start-source_start
     return clip
 
 
@@ -255,14 +259,22 @@ def frame_timelines():
 
 def summary_lines(manifest, start, scene_camera):
     n = manifest['frames']
-    lines = [f"{manifest['rig']['type'] if manifest.get('rig') else manifest['method']} · {n} frames · timeline {start}–{start+n-1}",
+    trimmed = manifest.get('trimmed')
+    lines = [f"Trimmed to plate frames {trimmed['used'][0]}–{trimmed['used'][1]} of {trimmed['requested'][0]}–{trimmed['requested'][1]}: {trimmed['reason']}"] if trimmed else []
+    lines += [f"{manifest['rig']['type'] if manifest.get('rig') else manifest['method']} · {n} frames · timeline {start}–{start+n-1}",
              f"Face: {manifest.get('face_capture', 'none').replace('_', ' ')} · {manifest['rig']['bones'] if manifest.get('rig') else 0} bones"]
     info = manifest.get('scene_camera')
     if info:
         error = info.get('plate_error_px', {})
         registration = info.get('registration', {})
         lines.append(f"Camera: {scene_camera or info.get('name')} (solved) · plate error {error.get('mean_px', 0):.1f} px mean, {error.get('p95_px', 0):.1f} px p95")
-        lines.append(f"World fit residual {registration.get('residual_median_m', 0)*100:.1f} cm · plate lock up to {info.get('plate_lock', {}).get('max_offset_m', 0)*100:.0f} cm · rotation lock {info.get('orientation_lock', 0):.1f}")
+        if info.get('placement') == 'plate-anchored':
+            anchored = info.get('anchored', {})
+            lines.append(f"Body follows the plate: the camera travels, which GVHMR's world motion cannot represent "
+                         f"(world fit off by {registration.get('residual_median_m', 0):.1f} m). Depth smoothed over {anchored.get('depth_smoothing_seconds', 0):.2f} s")
+        else:
+            lines.append(f"GVHMR world motion · world fit residual {registration.get('residual_median_m', 0)*100:.1f} cm · plate lock up to "
+                         f"{info.get('plate_lock', {}).get('max_offset_m', 0)*100:.0f} cm · rotation lock {info.get('orientation_lock', 0):.1f}")
         if info.get('gravity_tilt_degrees', 0) > 5:
             lines.append(f"GVHMR gravity is {info['gravity_tilt_degrees']:.0f}° from the scene's up axis: set the floor (ViPE scene alignment) if the scene should be ground-aligned")
     else:
@@ -275,7 +287,12 @@ def summary_lines(manifest, start, scene_camera):
 
 
 def import_bundle(path, start=1001, include_mesh=True, video='', scene=None, camera_view='WORLD', include_rig=True, plate=None):
+    """start: timeline frame of the job's requested first frame (the result may begin later when trimmed to the actor)."""
     manifest, arrays = read_bundle(path)
+    range_start = start
+    requested = ((plate or {}).get('options') or {}).get('start_frame')
+    if requested is not None:
+        start = range_start+manifest['source_start_frame']-requested
     scene = scene or bpy.context.scene
     source_name = (plate or {}).get('video') or video or manifest.get('source', 'Shot')
     stem = Path(source_name).stem
@@ -294,7 +311,7 @@ def import_bundle(path, start=1001, include_mesh=True, video='', scene=None, cam
     collection['frames'] = int(manifest['frames'])
     if plate and plate.get('plate'):
         collection['plate_pattern'] = str(Path(plate['video']).parent/plate['plate']['pattern'])
-        collection['plate_first_frame'] = int(plate['plate']['first_frame'])
+        collection['plate_first_frame'] = int(plate['plate']['first_frame'])+start-range_start  # file number of the result's first frame
     elif video and Path(video).suffix.lower() not in IMAGE_SUFFIXES:
         collection['plate_movie'] = str(Path(video).resolve())
         collection['source_start_frame'] = int(manifest['source_start_frame'])
@@ -356,7 +373,7 @@ def import_bundle(path, start=1001, include_mesh=True, video='', scene=None, cam
             cameras[-1]['mocap_camera_role'] = 'VIDEO'
             cameras[-1]['description'] = 'Preserves this actor’s SAM projection after hybrid world placement. Actor-specific; not a shared scene matchmove.'
         scene.camera = cameras[-1] if camera_view == 'VIDEO' else cameras[0]
-    clip = plate_clip(video, start, manifest['source_start_frame']) if video and Path(video).is_file() else None
+    clip = plate_clip(video, range_start, start, manifest['source_start_frame']) if video and Path(video).is_file() else None
     for camera in cameras:
         if camera is existing:
             continue
