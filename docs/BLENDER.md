@@ -2,7 +2,7 @@
 
 ## Install
 
-Build `mocap_comfy-0.6.1.zip` with `python scripts/build_packages.py` (output in `dist/`). Install it through **Edit → Preferences → Add-ons → Install from Disk**, enable **Mocap ComfyUI**, then restart Blender. Blender 4.4.0 on Linux is tested; Windows remains unvalidated.
+Build `mocap_comfy-0.6.2.zip` with `python scripts/build_packages.py` (output in `dist/`). Install it through **Edit → Preferences → Add-ons → Install from Disk**, enable **Mocap ComfyUI**, then restart Blender. Blender 4.4.0 on Linux is tested; Windows remains unvalidated.
 
 The worker URL, optional bearer token and download folder are **add-on preferences** (shared by all scenes; also shown in the **Worker** sub-panel). For a local worker use `http://127.0.0.1:8188`. A remote worker can use the team's approved HTTP(S) endpoint or an SSH tunnel:
 
@@ -61,3 +61,11 @@ Press numpad 0 to review the plate background (movie clip, or the proxy frames f
 - The colour space is taken from the EXR header only when the file declares its primaries (`chromaticities`); otherwise the panel says so and the chosen colour space (default ACEScg) is used. OIIO's `oiio:ColorSpace` value is a guess and is ignored.
 - The plate is a movie clip for movies and sequences alike (same mapping as the ViPE add-on; verified for sequences starting at 0977). It is composited under renders and Rendered view (transparent film, Standard view transform), unless the scene already has its own compositor setup. With a ViPE camera, ViPE's plate setup is kept.
 - ViPE sequence timing uses the ViPE job's stored plate frame numbers.
+
+## Picking actors in crowded shots (0.6.2)
+
+- **Pick on frame**: actors are detected and picked on any frame of the range (the clock button uses the timeline's current frame). Choose a frame where your actor is clearly separated; the worker tracks them forwards and backwards from it.
+- **Detect Actors** shows the overview plus a close-up of each detected person. Click a close-up's button to pick that actor; **Shift+click** adds or removes actors. **Submit** queues one job per selected actor (labelled with the actor number).
+- The worker keeps each plate range's prepared intermediate video and per-frame person boxes (`output/mocap/prepared`, last 12 ranges). Another actor of the same range skips decoding, encoding and detection; only that actor's tracking and inference run. With a sequence, the cached proxy and upload are reused as well.
+- If an actor cannot be followed (more than 12 frames without a matching person), the error names the plate frames where they were lost; pick them on a frame near there or shorten the range.
+- Each Submit now always creates and monitors its own job; in 0.6.1 a second submission in the same session could re-attach to the previous job and never reach the worker.

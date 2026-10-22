@@ -1,9 +1,11 @@
 """Server-side adapter for the study's tested inference and fusion paths."""
 import argparse
 import base64
+import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import signal
 import socket
 import subprocess
@@ -65,6 +67,24 @@ def draw_actors(frame, seeds, chosen=None):
     return preview
 
 
+def actor_crop(frame, box, number, size=192):
+    """Square close-up of one detected person (clean frame, small margin) with its number, as base64 JPEG."""
+    h, w = frame.shape[:2]
+    x1, y1, x2, y2 = box
+    side = max(x2-x1, y2-y1)*1.08
+    cx, cy = (x1+x2)/2, (y1+y2)/2
+    left, top = int(max(0, cx-side/2)), int(max(0, cy-side/2))
+    right, bottom = int(min(w, cx+side/2)), int(min(h, cy+side/2))
+    crop = np.zeros((int(side)+1, int(side)+1, 3), np.uint8)
+    ox, oy = int(left-(cx-side/2)), int(top-(cy-side/2))
+    crop[oy:oy+bottom-top, ox:ox+right-left] = frame[top:bottom, left:right]
+    crop = cv2.resize(crop, (size, size), interpolation=cv2.INTER_AREA)
+    cv2.rectangle(crop, (0, 0), (44, 34), (40, 40, 40), -1)
+    cv2.putText(crop, str(number), (6, 27), cv2.FONT_HERSHEY_SIMPLEX, .9, (255, 255, 255), 2)
+    ok, jpeg = cv2.imencode('.jpg', crop, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    return base64.b64encode(jpeg.tobytes()).decode()
+
+
 def detect_actors(source, frame_index, max_side, fps_override, output):
     """Preflight for the add-on: numbered person boxes on one frame, without inference."""
     plate = Plate(source, fps_override)
@@ -82,6 +102,7 @@ def detect_actors(source, frame_index, max_side, fps_override, output):
     result = dict(frame=frame_index, width=w, height=h, original_width=source_w, original_height=source_h,
                   frames=plate.count, fps=plate.fps, largest=largest,
                   boxes=[[x1/w, y1/h, x2/w, y2/h] for x1, y1, x2, y2 in seeds],
+                  crops=[actor_crop(frame, box, i) for i, box in enumerate(seeds)],
                   preview_jpeg=base64.b64encode(jpeg.tobytes()).decode())
     Path(output).write_text(json.dumps(result))
 
@@ -109,13 +130,27 @@ def load_known_camera(path, frames, source_w, source_h, w, h):
     return c2w, K, dict(info, scene_up=up.tolist())
 
 
-def prepare(root, source, options, study, camera_file=None):
-    from character_selection import track
-    status(root, 'Detecting and tracking the selected actor')
-    plate = Plate(source, options['fps_override'])
-    fps = plate.fps
+PREPARED_VERSION = 1
+PREPARED_KEEP = 12
+
+
+def prepared_plate(root, source, options, cache_dir=None):
+    """Downscaled intermediate video and per-frame person boxes for the job range.
+
+    Cached per plate range (the upload name is its content hash), so another actor of the same
+    plate skips decoding, encoding and detection.
+    """
     out = root / 'inputs' / 'shot'
     out.mkdir(parents=True)
+    key = hashlib.sha256(json.dumps(dict(source=source.name, bytes=source.stat().st_size, start=options['start_frame'], count=options['max_frames'],
+                                         side=options['max_side'], fps=options['fps_override'], version=PREPARED_VERSION), sort_keys=True).encode()).hexdigest()[:24]
+    cached = Path(cache_dir)/key if cache_dir else None
+    if cached is not None and (cached/'prepared.json').is_file():
+        report('prepare', 'Reusing the prepared plate and person detections')
+        shutil.copyfile(cached/'input.mp4', out/'input.mp4')
+        os.utime(cached)
+        return json.loads((cached/'prepared.json').read_text())
+    plate = Plate(source, options['fps_override'])
     available = max(0, plate.count-options['start_frame'])
     expected = min(available, options['max_frames']) if options['max_frames'] else available
     detect, close = person_detector()
@@ -128,42 +163,81 @@ def prepare(root, source, options, study, camera_file=None):
             if (w, h) != (source_w, source_h):
                 frame = cv2.resize(frame, (w, h), interpolation=cv2.INTER_AREA)
             if writer is None:
-                writer = VideoSink(out / 'input.mp4', fps, w, h)
-                cv2.imwrite(str(root / 'first_frame.jpg'), frame)
+                writer = VideoSink(out / 'input.mp4', plate.fps, w, h)
             detections.append(detect(frame))
             writer.write(frame)
-            report('prepare', 'Detecting and tracking the selected actor', len(detections), expected or None, frames=expected or None)
+            report('prepare', 'Detecting people on every frame', len(detections), expected or None, frames=expected or None)
     finally:
         close()
         if writer is not None:
             writer.close()
     if len(detections) < 8:
         raise ValueError('Select at least 8 decodable frames for temporal body inference')
-    seeds = sorted(detections[0], key=lambda b: (b[0] + b[2]) / 2)
+    info = dict(fps=plate.fps, width=w, height=h, source_width=source_w, source_height=source_h, plate=plate.plate,
+                name=plate.plate['pattern'] if plate.plate else source.name, detections=detections)
+    if cached is not None:
+        staging = cached.with_name(key+'.part')
+        shutil.rmtree(staging, ignore_errors=True)
+        staging.mkdir(parents=True)
+        shutil.copyfile(out/'input.mp4', staging/'input.mp4')
+        (staging/'prepared.json').write_text(json.dumps(info))
+        shutil.rmtree(cached, ignore_errors=True)
+        staging.rename(cached)
+        for old in sorted((d for d in cached.parent.iterdir() if d.is_dir() and not d.name.endswith('.part')), key=lambda d: d.stat().st_mtime)[:-PREPARED_KEEP]:
+            shutil.rmtree(old, ignore_errors=True)
+    return info
+
+
+def video_frame(path, index):
+    capture = cv2.VideoCapture(str(path))
+    try:
+        for _ in range(index):
+            capture.grab()
+        ok, frame = capture.read()
+    finally:
+        capture.release()
+    return frame if ok else None
+
+
+def prepare(root, source, options, study, camera_file=None, cache_dir=None):
+    from character_selection import track
+    status(root, 'Detecting and tracking the selected actor')
+    info = prepared_plate(root, source, options, cache_dir)
+    out = root / 'inputs' / 'shot'
+    fps, w, h, source_w, source_h = info['fps'], info['width'], info['height'], info['source_width'], info['source_height']
+    detections = info['detections']
+    first_number = (info['plate']['first_frame'] if info['plate'] else 1)+options['start_frame']
+    # The actor is picked on any frame of the range and tracked forwards and backwards from it.
+    seed = min(max(int(options.get('seed_frame', 0)), 0), len(detections)-1)
+    seeds = sorted(detections[seed], key=lambda b: (b[0] + b[2]) / 2)
     if not seeds:
-        raise ValueError('No person detected in the first selected frame; change the video start')
+        raise ValueError(f'No person detected on plate frame {first_number+seed}; pick another frame')
     index = options['actor_index']
     if options.get('actor_box'):
         # The add-on's preflight box (normalized) identifies the actor independently of ordering.
         chosen = np.asarray(options['actor_box'], float)*[w, h, w, h]
         overlaps = [iou(chosen, b) for b in seeds]
         if max(overlaps) < .3:
-            raise ValueError('The actor picked in Detect Actors is not found in the first frame; detect again')
+            raise ValueError(f'The actor picked in Detect Actors is not found on plate frame {first_number+seed}; detect again')
         index = int(np.argmax(overlaps))
     if index == -1:
         index = int(np.argmax([(b[2]-b[0])*(b[3]-b[1]) for b in seeds]))
     if index < 0 or index >= len(seeds):
-        raise ValueError(f'Actor index {index} is unavailable; first frame contains {len(seeds)} people')
-    all_boxes, observed = track(seeds, detections)
+        raise ValueError(f'Actor index {index} is unavailable; plate frame {first_number+seed} contains {len(seeds)} people')
+    forward, forward_seen = track(seeds, detections[seed:])
+    backward, backward_seen = track(seeds, detections[seed::-1])
+    all_boxes = np.concatenate([backward[::-1][:-1], forward])
+    observed = np.concatenate([backward_seen[::-1][:-1], forward_seen])
     boxes = all_boxes[:, index]
+    seen = observed[:, index]
     gap = 0
-    for i, found in enumerate(observed[:, index]):
+    for i, found in enumerate(seen):
         gap = 0 if found else gap + 1
         if gap > 12:
-            # Name the frame as the artist sees it: plate file number for sequences, 1-based for movies.
-            lost = (plate.plate['first_frame'] if plate.plate else 1)+options['start_frame']+i-gap+1
-            raise ValueError(f'Actor {index} lost from plate frame {lost} (no matching person for {gap} frames): occlusion, leaving the frame '
-                             'or fast motion. Shorten the range, or pick the actor with Detect Actors after that point.')
+            start = i-gap+1
+            end = next((j for j in range(i, len(seen)) if seen[j]), len(seen))-1
+            raise ValueError(f'Actor {index} not found on plate frames {first_number+start}-{first_number+end}: occlusion, leaving the frame '
+                             'or fast motion. Shorten the range, or pick the actor on a frame near there with Detect Actors.')
     boxes[:, [0, 2]] = np.clip(boxes[:, [0, 2]], 0, w - 1)
     boxes[:, [1, 3]] = np.clip(boxes[:, [1, 3]], 0, h - 1)
     if np.any(boxes[:, 2:] <= boxes[:, :2]):
@@ -188,16 +262,15 @@ def prepare(root, source, options, study, camera_file=None):
         focal = options['focal_px'] * w / source_w if options['focal_px'] else float(np.hypot(w, h))
         K = np.array([[focal, 0, w/2], [0, focal, h/2], [0, 0, 1]])
         intrinsics_source = 'user focal in original-width pixels' if options['focal_px'] else 'assumed image diagonal focal; not calibrated'
-    name = plate.plate['pattern'] if plate.plate else source.name
-    meta = dict(name='shot', source=name, start_frame=options['start_frame'], frames=len(boxes), fps=fps,
+    meta = dict(name='shot', source=info['name'], start_frame=options['start_frame'], frames=len(boxes), fps=fps,
                 width=w, height=h, original_width=source_w, original_height=source_h,
                 moving_camera=options['moving_camera'], boxes_xyxy=boxes.tolist(), K=K.tolist(),
                 track_id=f'person_{index+1:03}', actor_index=index, intrinsics_source=intrinsics_source,
-                tracking='First-frame seeds sorted left to right; Hungarian IoU/velocity association',
-                inferred_box_frames=np.flatnonzero(~observed[:, index]).tolist(), known_camera=known_info,
-                plate=plate.plate)
+                tracking=f'Seeds on range frame {seed} sorted left to right; Hungarian IoU/velocity association forwards and backwards',
+                seed_frame=seed, inferred_box_frames=np.flatnonzero(~observed[:, index]).tolist(), known_camera=known_info,
+                plate=info['plate'])
     (out / 'clip.json').write_text(json.dumps(meta, indent=2))
-    cv2.imwrite(str(root / 'actor_preview.jpg'), draw_actors(cv2.imread(str(root / 'first_frame.jpg')), seeds, index))
+    cv2.imwrite(str(root / 'actor_preview.jpg'), draw_actors(video_frame(out/'input.mp4', seed), seeds, index))
     return meta
 
 
@@ -454,6 +527,7 @@ def main():
     parser.add_argument('--options', type=Path)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--camera', type=Path)
+    parser.add_argument('--prepared-cache', type=Path, help='Reuse/keep prepared plates (intermediate video + person boxes)')
     parser.add_argument('--detect', type=int, metavar='FRAME', help='Only detect actors on this frame and write JSON to --output')
     parser.add_argument('--max-side', type=int, default=1280)
     parser.add_argument('--fps-override', type=float, default=0.)
@@ -471,7 +545,7 @@ def main():
     timings = {}
     # Inference children inherit the server's original GPU selection.
     inference_env = os.environ.copy()
-    meta = prepare(args.job_root, args.video, options, args.study, args.camera)
+    meta = prepare(args.job_root, args.video, options, args.study, args.camera, args.prepared_cache)
     timings['prepare_seconds'] = time.perf_counter()-started
     methods = ['gvhmr', 'sam'] if options['method'] == 'hybrid' else ['gvhmr']
     for method in methods:

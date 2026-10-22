@@ -143,3 +143,7 @@ Deploy `worker.py`, the new `media.py` and `scene_camera.py`, both `comfy_nodes/
 ### Optional warm models
 
 With the job input `warm_models=true`, `worker.py` hands GVHMR and SAM inference to long-lived `run_model.py serve` processes (one per model) over Unix sockets in `MOCAP_WARM_DIR` (default `/tmp/mocap-warm-<uid>`). They keep models in host RAM (about 6–7 GB per process) and release GPU memory after every job except the CUDA context (about 0.25 GB each), so they coexist with other GPU work. They exit after `MOCAP_WARM_IDLE_SECONDS` (default 900) without a job. Inference stays serialized by the same `inference.lock`; a cancelled job kills the server it was using. RealDenseFace still runs per job. Leave it off on shared pools where host RAM is scarce.
+
+### Worker update 0.6.2
+
+`worker.py` and `comfy_nodes/__init__.py` changed: restart ComfyUI. New optional input `seed_frame` (frame of the range where `actor_box` was picked; tracking runs forwards and backwards from it). Prepared plates (intermediate video + per-frame person boxes) are cached in `<ComfyUI output>/mocap/prepared/`, keyed by upload name, range, processing size and FPS override; the 12 most recently used are kept. An older add-on without a pick frame still works (seed 0).
