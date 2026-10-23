@@ -2,7 +2,7 @@
 
 ## Install
 
-Build `mocap_comfy-0.6.0.zip` with `python scripts/build_packages.py` (output in `dist/`). Install it through **Edit → Preferences → Add-ons → Install from Disk**, enable **Mocap ComfyUI**, then restart Blender. Blender 4.4.0 on Linux is tested; Windows remains unvalidated.
+Build `mocap_comfy-0.6.3.zip` with `python scripts/build_packages.py` (output in `dist/`). Install it through **Edit → Preferences → Add-ons → Install from Disk**, enable **Mocap ComfyUI**, then restart Blender. Blender 4.4.0 on Linux is tested; Windows remains unvalidated.
 
 The worker URL, optional bearer token and download folder are **add-on preferences** (shared by all scenes; also shown in the **Worker** sub-panel). For a local worker use `http://127.0.0.1:8188`. A remote worker can use the team's approved HTTP(S) endpoint or an SSH tunnel:
 
@@ -53,3 +53,25 @@ Press numpad 0 to review the plate background (movie clip, or the proxy frames f
 ## Jobs, cancellation and resume
 
 **Cancel Job** uses the fork's job-scoped cancellation route. **Resume** reconnects to a submitted job (job ID kept in the scene) without submitting it again. A server restart may remove queue/history, so keep downloaded results. Full received logs are saved with each download.
+
+## Plates, paths and colour (0.6.1)
+
+- The chosen plate is stored as an **absolute** path. Blender's file browser writes paths relative to the .blend; behind a symlinked folder (for example `~/dev-lbringer` → `/mnt/share/dev-lbringer`) such paths pointed at nothing in 0.6.0 ("File not found").
+- Image-sequence proxies use Blender's bundled OCIO config and are **cached** in the download folder (`proxies/`), keyed by the selected files and settings. Rebuilt proxies are byte-identical, so Detect Actors, resubmissions and other actors on the same range reuse the proxy and the upload (30 frames at 4608×3164: 114 s → 51 s for a resubmitted job).
+- The colour space is taken from the EXR header only when the file declares its primaries (`chromaticities`); otherwise the panel says so and the chosen colour space (default ACEScg) is used. OIIO's `oiio:ColorSpace` value is a guess and is ignored.
+- The plate is a movie clip for movies and sequences alike (same mapping as the ViPE add-on; verified for sequences starting at 0977). It is composited under renders and Rendered view (transparent film, Standard view transform), unless the scene already has its own compositor setup. With a ViPE camera, ViPE's plate setup is kept.
+- ViPE sequence timing uses the ViPE job's stored plate frame numbers.
+
+## Picking actors in crowded shots (0.6.2)
+
+- **Pick on frame**: actors are detected and picked on any frame of the range (the clock button uses the timeline's current frame). Choose a frame where your actor is clearly separated; the worker tracks them forwards and backwards from it.
+- **Detect Actors** shows the overview plus a close-up of each detected person. Click a close-up's button to pick that actor; **Shift+click** adds or removes actors. **Submit** queues one job per selected actor (labelled with the actor number).
+- The worker keeps each plate range's prepared intermediate video and per-frame person boxes (`output/mocap/prepared`, last 12 ranges). Another actor of the same range skips decoding, encoding and detection; only that actor's tracking and inference run. With a sequence, the cached proxy and upload are reused as well.
+- If an actor cannot be followed (more than 12 frames without a matching person), the error names the plate frames where they were lost; pick them on a frame near there or shorten the range.
+- Each Submit now always creates and monitors its own job; in 0.6.1 a second submission in the same session could re-attach to the previous job and never reach the worker.
+
+## Crowds, actors leaving the frame and travelling cameras (0.6.3)
+
+- **Actor tracking** was rebuilt for crowded plates: a person's box centre is predicted with a damped velocity and its size is smoothed (a partial detection can no longer collapse the prediction); matches must be near and of plausible size; a person who leaves the image is not searched for elsewhere; short gaps are interpolated.
+- **Trim to visible actor** (on by default): if the picked actor is hidden or outside the image for part of the range, the job processes only the frames where they are visible and the Result panel says so (for example "Trimmed to plate frames 977–1070 of 977–1092"). The import lands on the right timeline frames. It fails only if fewer than 8 frames remain.
+- **Body placement** (solved camera): GVHMR models camera rotation but not camera travel, so on dolly, truck and crane shots its world motion carries the camera's travel. *Auto* checks how well GVHMR's world motion fits the solved camera; when it does not (world fit off by more than 15 % of the subject distance), the body *follows the plate*: on its viewing ray every frame, with the depth smoothed in world space as much as possible while staying within 1 % of the image width of the plate. *GVHMR world motion* and *Follow the plate* can be forced. Example (MWTB SSR-0500, actor 7, camera trucking 7.6 m): plate error 299 px mean before, 1.6 px after.

@@ -1,5 +1,5 @@
 bl_info = {
-    'name': 'Mocap ComfyUI', 'author': 'Innovation', 'version': (0, 6, 0),
+    'name': 'Mocap ComfyUI', 'author': 'Innovation', 'version': (0, 6, 3),
     'blender': (4, 2, 0), 'location': '3D View > Sidebar > Mocap',
     'description': 'Submit footage to ComfyUI and import editable body rigs, mesh, and cameras',
     'category': 'Animation',
@@ -8,6 +8,7 @@ bl_info = {
 from pathlib import Path
 import base64
 import json
+import os
 import queue
 import re
 import tempfile
@@ -100,10 +101,50 @@ def face_visual_changed(settings, context):
         context.space_data.show_gizmo_context = True
 
 
+def plate_file(value):
+    """Absolute plate path with '..' collapsed the way Blender resolves '//' paths.
+
+    Blender makes paths relative lexically (from the .blend path as opened), while the OS resolves
+    '..' physically: behind a symlinked folder such as ~/dev-lbringer -> /mnt/share/dev-lbringer,
+    the raw path would leave the tree and point at nothing.
+    """
+    return os.path.normpath(bpy.path.abspath(value)) if value else ''
+
+
+# EXR chromaticities (rx, ry, gx, gy, bx, by) of the colour spaces offered for proxies.
+PRIMARIES = {'ACEScg': (.713, .293, .165, .830, .128, .044), 'ACES2065-1': (.7347, .2653, 0., 1., .0001, -.077),
+             'Linear Rec.709': (.64, .33, .30, .60, .15, .06), 'Linear Rec.2020': (.708, .292, .170, .797, .131, .046)}
+
+
+def declared_colorspace(path):
+    """Colour space from the EXR's declared primaries, or None (OIIO's 'oiio:ColorSpace' is only a guess)."""
+    if Path(path).suffix.lower() != '.exr':
+        return None
+    try:
+        import OpenImageIO as oiio
+        image = oiio.ImageInput.open(str(path))
+        if image is None:
+            return None
+        try:
+            chromaticities = image.spec().getattribute('chromaticities')
+        finally:
+            image.close()
+    except Exception:
+        return None
+    if not chromaticities or len(chromaticities) < 6:
+        return None
+    return next((name for name, primaries in PRIMARIES.items() if max(abs(a-b) for a, b in zip(chromaticities[:6], primaries)) < .005), None)
+
+
 def probe_plate(settings, context):
     """Header-only description of the chosen video or image sequence; no pixels are read."""
+    if settings.video and settings.video != plate_file(settings.video):
+        settings.video = plate_file(settings.video)  # store absolute; this update runs again
+        return
     settings.detect_json = ''
-    path = Path(bpy.path.abspath(settings.video)) if settings.video else None
+    settings.actor_selection = ''
+    settings.pick_frame = 0
+    path = Path(settings.video) if settings.video else None
     if path is None or not path.is_file():
         settings.plate_info = json.dumps({'error': 'File not found'} if settings.video else {})
         return
@@ -114,9 +155,12 @@ def probe_plate(settings, context):
             settings.plate_info = json.dumps({'error': f'Cannot read this image sequence: {exc}'})
             return
         fps = seq['fps'][0]/seq['fps'][1] if seq['fps'] else None
+        declared = declared_colorspace(path)
+        if declared:
+            settings.plate_colorspace = declared
         settings.plate_info = json.dumps(dict(sequence=True, width=seq['width'], height=seq['height'], frames=seq['count'], fps=fps,
                                               fps_rational=list(seq['fps']) if seq['fps'] else None, first=seq['first'], last=seq['last'],
-                                              pattern=seq['pattern'], gaps=seq['gaps'], pixel_aspect=seq['pixel_aspect']))
+                                              pattern=seq['pattern'], gaps=seq['gaps'], pixel_aspect=seq['pixel_aspect'], declared_colorspace=declared))
         settings.first_frame, settings.last_frame = seq['first'], seq['last']
         return
     if path.suffix.lower() not in VIDEO_SUFFIXES:
@@ -174,7 +218,10 @@ class MocapSettings(PropertyGroup):
                                    description='Colour space of image-sequence pixels; the upload proxy is tone-mapped to display sRGB for the networks')
     first_frame: IntProperty(name='First', default=1, description='First frame to process: 1-based for movies, the file frame number for sequences')
     last_frame: IntProperty(name='Last', default=0, min=0, description='Last frame to process (inclusive); 0 = to the end')
-    actor_index: IntProperty(name='Actor', default=-1, min=-1, max=1000, description='Actors are numbered 0, 1, 2 from left to right on the first frame; -1 = largest')
+    actor_index: IntProperty(name='Actor', default=-1, min=-1, max=1000, description='Actors are numbered 0, 1, 2 from left to right on the pick frame; -1 = largest')
+    actor_selection: StringProperty(options={'HIDDEN'}, description='Detected actors to process, one job each')
+    trim_to_actor: BoolProperty(name='Trim to visible actor', default=True, description='If the actor is hidden or outside the image for part of the range, process only the frames where they are visible (the result says which) instead of failing')
+    pick_frame: IntProperty(name='Pick on frame', default=0, description='Plate frame where actors are detected and picked (tracked forwards and backwards from it); outside the range = first frame')
     detect_json: StringProperty(options={'HIDDEN'})
     # Processing
     preset: EnumProperty(name='Quality', items=[('QUICK', 'Quick body (GVHMR)', 'Body and world motion only; fastest'),
@@ -197,6 +244,9 @@ class MocapSettings(PropertyGroup):
     sensor_preset: EnumProperty(name='Filmback', items=[item[:3] for item in SENSOR_PRESETS], default='FULL_FRAME', update=sensor_preset_changed)
     sensor_mm: FloatProperty(name='Sensor width (mm)', default=36., min=.1)
     scene_camera: PointerProperty(name='Scene camera', type=bpy.types.Object, poll=scene_camera_poll)
+    scene_placement: EnumProperty(name='Body placement', items=[('auto', 'Auto', "GVHMR's world motion when it agrees with the solved camera, otherwise follow the plate"),
+                                                               ('world', 'GVHMR world motion', 'Clean world trajectory and foot contacts; for pans, tilts and handheld cameras that travel little'),
+                                                               ('plate', 'Follow the plate', 'On the plate every frame with smoothed depth; for dolly, truck and crane shots')], default='auto')
     plate_lock: FloatProperty(name='Plate lock', default=1., min=0., max=1., subtype='FACTOR', description='Sideways correction (no depth change) keeping the body on the plate under the solved camera')
     orientation_lock: FloatProperty(name='Rotation lock', default=.5, min=0., max=1., subtype='FACTOR', description="Turn the body's root toward the orientation seen in the plate (smoothed); 1 fits the plate best, 0 keeps GVHMR's world orientation")
     plate_lock_smoothing: FloatProperty(name='Lock smoothing (frames)', default=3., min=0., max=12., description='Gaussian smoothing of the plate and rotation locks; higher is steadier, lower follows the plate more closely')
@@ -247,6 +297,9 @@ def timeline_start(settings, sel):
         timing = scene_camera.vipe_timing(settings.scene_camera)
         if timing and not sel['sequence']:
             return timing['zero_frame']+sel['start_index']
+        if timing and timing['plate_first_frame'] is not None:
+            # ViPE stores the file number of its source frame 0; map plate numbers through it.
+            return timing['zero_frame']+sel['first']-timing['plate_first_frame']
     if sel['sequence']:
         return sel['first']
     return settings.frame_start
@@ -280,9 +333,12 @@ def camera_check(settings, sel):
 
 # ---------------------------------------------------------------- jobs
 
+def cache_root():
+    return Path(plate_file(prefs().cache_dir) if prefs().cache_dir else bpy.utils.user_resource('DATAFILES', path='mocap_comfy', create=True))
+
+
 def job_folder(key):
-    root = bpy.path.abspath(prefs().cache_dir) if prefs().cache_dir else bpy.utils.user_resource('DATAFILES', path='mocap_comfy', create=True)
-    folder = Path(root)/key
+    folder = cache_root()/key
     folder.mkdir(parents=True, exist_ok=True)
     return folder
 
@@ -299,25 +355,39 @@ def selected_job(context):
 
 
 def new_job(scene, label, record):
+    """Add a job at the top of the list and return its key.
+
+    Job items are always looked up by key: Blender list items move in memory (move/add/remove,
+    undo), so a Python reference to one can silently point at another job.
+    """
     settings = scene.mocap_comfy
-    job = settings.jobs.add()
-    job.key = uuid.uuid4().hex[:12]
-    job.label, job.created, job.state = label, time.time(), 'STARTING'
-    job.record = json.dumps(record)
+    key = uuid.uuid4().hex[:12]
+    item = settings.jobs.add()
+    item.key = key
     text = bpy.data.texts.new(f'Mocap log {label[:24]}')
     text['mocap_job_log'] = True
-    job.log_text = settings.log_text = text.name
+    settings.log_text = text.name
     settings.jobs.move(len(settings.jobs)-1, 0)
-    settings.jobs_index = 0
+    job = find_job(scene, key)
+    job.label, job.created, job.state = label, time.time(), 'STARTING'
+    job.record = json.dumps(record)
+    job.log_text = text.name
+    settings.jobs_index = next(i for i, item in enumerate(settings.jobs) if item.key == key)
     refresh_log_views(scene, text)
-    return job
+    return key
 
 
-def start_monitor(scene, job, work):
-    """Run work(run) in a thread; it reports through run['events'] and is polled on the main thread."""
-    run = dict(key=job.key, scene=scene.name, events=queue.Queue(), stop=threading.Event(), client=ComfyClient(prefs().endpoint, prefs().token),
-               prompt_id=job.prompt_id, started=time.monotonic(), stage='upload', packet={}, record=loads(job.record))
-    _runs[job.key] = run
+def start_monitor(scene, key, work, fresh=False):
+    """Run work(run) in a thread; it reports through run['events'] and is polled on the main thread.
+
+    fresh: a new submission, which never inherits a worker prompt ID.
+    """
+    job = find_job(scene, key)
+    run = dict(key=key, scene=scene.name, events=queue.Queue(), stop=threading.Event(), client=ComfyClient(prefs().endpoint, prefs().token),
+               prompt_id='' if fresh else job.prompt_id, started=time.monotonic(), stage='upload', packet={}, record=loads(job.record))
+    if fresh and job.prompt_id:
+        raise RuntimeError('Internal error: a new job already has a worker ID; nothing was submitted')
+    _runs[key] = run
 
     def target():
         try:
@@ -358,25 +428,49 @@ def remote_job(run, uploaded, options, camera_file=None):
     events.put(('done', path))
 
 
-def submit_options(settings, sel):
+def pick_index(settings, sel):
+    """Frame of the range (0 = first) where actors are picked."""
+    return settings.pick_frame-sel['first'] if sel['first'] <= settings.pick_frame <= sel['last'] else 0
+
+
+def current_detection(settings, sel):
+    detected = loads(settings.detect_json)
+    return detected if detected.get('key') == detect_key(settings, sel) and detected.get('boxes') is not None else None
+
+
+def selected_actors(settings, sel):
+    """Actors to submit: the picked detections (one job each), else the Actor number."""
+    detected = current_detection(settings, sel)
+    if detected is None:
+        return [settings.actor_index]
+    chosen = [a for a in json.loads(settings.actor_selection or '[]') if 0 <= a < len(detected['boxes'])]
+    return chosen or ([settings.actor_index] if 0 <= settings.actor_index < len(detected['boxes']) else [detected['largest']])
+
+
+def submit_options(settings, sel, actor):
     options = dict(method=settings.method, start_frame=0 if sel['sequence'] else sel['start_index'], max_frames=0 if sel['sequence'] else sel['count'],
-                   actor_index=settings.actor_index, moving_camera=settings.moving_camera, fps_override=settings.fps_override,
+                   actor_index=actor, moving_camera=settings.moving_camera, fps_override=settings.fps_override,
                    focal_px=0., max_side=settings.max_side, sam_smoothing=settings.sam_smoothing,
                    hand_refinement=settings.hand_refinement, face_capture=settings.face_capture if settings.method == 'hybrid' else 'none')
+    if not settings.trim_to_actor:
+        options['trim_to_actor'] = False
     if settings.camera_mode == 'FOCAL':
         options['focal_px'] = settings.focal_mm/settings.sensor_mm*plate(settings)['width']
     if settings.camera_mode == 'SCENE':
-        options.update(plate_lock=settings.plate_lock, orientation_lock=settings.orientation_lock, plate_lock_smoothing=settings.plate_lock_smoothing)
+        options.update(scene_placement=settings.scene_placement, plate_lock=settings.plate_lock, orientation_lock=settings.orientation_lock,
+                       plate_lock_smoothing=settings.plate_lock_smoothing)
     if settings.warm_models:
         options['warm_models'] = True
-    detected = loads(settings.detect_json)
-    if detected.get('key') == detect_key(settings, sel) and 0 <= settings.actor_index < len(detected.get('boxes', [])):
-        options['actor_box'] = json.dumps(detected['boxes'][settings.actor_index])
+    detected = current_detection(settings, sel)
+    if detected is not None and 0 <= actor < len(detected['boxes']):
+        options['actor_box'] = json.dumps(detected['boxes'][actor])
+        options['seed_frame'] = pick_index(settings, sel)
     return options
 
 
 def detect_key(settings, sel):
-    return f"{bpy.path.abspath(settings.video)}|{sel['first']}|{settings.max_side}|{settings.plate_colorspace if sel['sequence'] else ''}"
+    return (f"{plate_file(settings.video)}|{sel['first']}|{sel['last']}|{pick_index(settings, sel)}|{settings.max_side}|"
+            f"{settings.plate_colorspace if sel['sequence'] else ''}")
 
 
 def plate_fps(settings):
@@ -387,50 +481,83 @@ def plate_fps(settings):
     return (round(fps*1000), 1000)
 
 
+def ocio_config():
+    """Blender's bundled OCIO config, so proxies never depend on $OCIO or the launch environment."""
+    return os.path.join(bpy.utils.resource_path('LOCAL'), 'datafiles', 'colormanagement', 'config.ocio')
+
+
+# Queued jobs of one plate share the proxy and the upload: build and send each only once.
+_proxy_lock = threading.Lock()
+_upload_lock = threading.Lock()
+
+
+def sequence_proxy(video, cache_root, snapshot, progress=lambda *args: None, stop=lambda: False):
+    """Proxy archive for a sequence selection, cached by the selected files and proxy settings.
+
+    Rebuilt proxies are byte-identical, so the worker also recognises the upload.
+    """
+    options = dict(first_index=snapshot['first_index'], last_index=snapshot['last_index'], long_edge=snapshot['max_side'],
+                   colorspace=snapshot['colorspace'], fps=snapshot['fps'])
+    cache = Path(cache_root)/'proxies'/plate_proxy.proxy_key(video, **options)
+    with _proxy_lock:
+        found = plate_proxy.cached_proxy(cache)
+        if found:
+            progress('Plate proxy reused', 1.)
+            return found
+        return plate_proxy.build_proxy(video, cache, ocio_config=snapshot['ocio_config'], progress=progress, stop=stop, **options)
+
+
 def build_upload(run, settings_snapshot, progress):
     """Movie path, or the proxy ZIP of an image-sequence selection (built on the artist machine)."""
     record = run['record']
     if not record['sequence']:
         return record['video']
-    archive, plate_json, first = plate_proxy.build_proxy(record['video'], Path(record['folder']), first_index=settings_snapshot['first_index'],
-                                                         last_index=settings_snapshot['last_index'], long_edge=settings_snapshot['max_side'],
-                                                         colorspace=settings_snapshot['colorspace'], fps=settings_snapshot['fps'],
-                                                         progress=lambda stage, fraction: progress(dict(stage=stage, done=fraction, total=1.)), stop=run['stop'].is_set)
+    archive, plate_json, first = sequence_proxy(record['video'], Path(record['folder']).parent, settings_snapshot,
+                                                lambda stage, fraction: progress(dict(stage=stage, done=fraction, total=1.)), run['stop'].is_set)
     record['background'] = str(first)
     record['plate'] = plate_json
     run['events'].put(('record', record))
     return str(archive)
 
 
-def begin_submit(context):
-    scene, settings = context.scene, context.scene.mocap_comfy
+def submit_all(context):
+    """One job per selected actor; the scene camera is sampled once for all of them."""
+    settings = context.scene.mocap_comfy
     sel = selection(settings)
     info = plate(settings)
     if sel['sequence'] and abs(info.get('pixel_aspect', 1.)-1) > 1e-3:
         raise ValueError('Anamorphic plates are not supported yet; desqueeze the plate first')
-    start = timeline_start(settings, sel)
     camera_json = None
     if settings.camera_mode == 'SCENE':
         issues = camera_check(settings, sel)
         if issues:
             raise ValueError(issues[0])
+        start = timeline_start(settings, sel)
         camera_json = scene_camera.sample(context, settings.scene_camera, list(range(start, start+sel['count'])), info['width'], info['height'])
-    options = submit_options(settings, sel)
-    video = bpy.path.abspath(settings.video)
-    label = f"{Path(video).stem[:20]} · {sel['first']}–{sel['last']} · {settings.preset.replace('_', ' ').lower()}"
+    return [begin_submit(context, actor, camera_json) for actor in selected_actors(settings, sel)]
+
+
+def begin_submit(context, actor, camera_json=None):
+    scene, settings = context.scene, context.scene.mocap_comfy
+    sel = selection(settings)
+    start = timeline_start(settings, sel)
+    options = submit_options(settings, sel, actor)
+    video = plate_file(settings.video)
+    who = 'largest actor' if actor < 0 else f'actor {actor}'
+    label = f"{Path(video).stem[:20]} · {sel['first']}–{sel['last']} · {who} · {settings.preset.replace('_', ' ').lower()}"
     record = dict(video=video, sequence=sel['sequence'], timeline_start=start, first=sel['first'], count=sel['count'],
                   include_mesh=settings.include_mesh, include_rig=settings.include_rig, auto_import=settings.auto_import,
                   camera_view=settings.camera_view, options=options, camera=settings.scene_camera.name if camera_json else '',
                   plate=None, background='')
-    job = new_job(scene, label, record)
-    record['folder'] = str(job_folder(job.key))
-    job.record = json.dumps(record)
+    key = new_job(scene, label, record)
+    record['folder'] = str(job_folder(key))
+    find_job(scene, key).record = json.dumps(record)
     camera_file = None
     if camera_json:
         camera_file = Path(record['folder'])/'scene_camera.json'
         camera_file.write_text(json.dumps(camera_json))
     snapshot = dict(first_index=sel['start_index']+1, last_index=sel['start_index']+sel['count'], max_side=settings.max_side,
-                    colorspace=settings.plate_colorspace, fps=plate_fps(settings))
+                    colorspace=settings.plate_colorspace, fps=plate_fps(settings), ocio_config=ocio_config())
 
     def work(run):
         client = run['client']
@@ -441,10 +568,12 @@ def begin_submit(context):
         def progress(packet):
             run['events'].put(('progress', packet))
         path = build_upload(run, snapshot, progress)
-        uploaded = client.upload(path, on_progress=progress)
+        with _upload_lock:
+            uploaded = client.upload(path, on_progress=progress)
         run['events'].put(('stage', 'prepare'))
         remote_job(run, uploaded, options, camera_file)
-    start_monitor(scene, job, work)
+    start_monitor(scene, key, work, fresh=True)
+    return key
 
 
 def begin_resume(context, job):
@@ -457,7 +586,7 @@ def begin_resume(context, job):
         record['folder'] = str(job_folder(job.key))
         job.record = json.dumps(record)
     job.state, job.error = 'RESUMING', ''
-    start_monitor(context.scene, job, lambda run: remote_job(run, None, None))
+    start_monitor(context.scene, job.key, lambda run: remote_job(run, None, None))
 
 
 def import_job(scene, job):
@@ -564,7 +693,9 @@ class MOCAP_OT_submit(Operator):
 
     def execute(self, context):
         try:
-            begin_submit(context)
+            keys = submit_all(context)
+            if len(keys) > 1:
+                self.report({'INFO'}, f'{len(keys)} jobs queued, one per selected actor')
         except Exception as exc:
             self.report({'ERROR'}, str(exc))
             return {'CANCELLED'}
@@ -588,7 +719,7 @@ class MOCAP_OT_full_clip(Operator):
 class MOCAP_OT_detect(Operator):
     bl_idname = 'mocap_comfy.detect'
     bl_label = 'Detect Actors'
-    bl_description = 'Upload the plate (reused by the job) and show numbered actors on the first selected frame'
+    bl_description = 'Upload the plate (reused by the job) and show each person on the pick frame'
 
     def execute(self, context):
         global _detect
@@ -601,22 +732,24 @@ class MOCAP_OT_detect(Operator):
         except ValueError as exc:
             self.report({'ERROR'}, str(exc))
             return {'CANCELLED'}
-        video, key, scene_name = bpy.path.abspath(settings.video), detect_key(settings, sel), context.scene.name
+        video, key, scene_name = plate_file(settings.video), detect_key(settings, sel), context.scene.name
         # A two-frame proxy (the archive minimum) at the job's processing size gives identical boxes.
-        snapshot = dict(first_index=sel['start_index']+1, last_index=sel['start_index']+2, max_side=settings.max_side,
-                        colorspace=settings.plate_colorspace, fps=plate_fps(settings), fps_override=settings.fps_override)
+        pick = pick_index(settings, sel)
+        pair = min(pick, max(0, sel['count']-2))
+        snapshot = dict(first_index=sel['start_index']+pair+1, last_index=sel['start_index']+pair+2, max_side=settings.max_side,
+                        colorspace=settings.plate_colorspace, fps=plate_fps(settings), fps_override=settings.fps_override, ocio_config=ocio_config(),
+                        cache_root=str(cache_root()))
         client = ComfyClient(prefs(context).endpoint, prefs(context).token)
         _detect = dict(scene=scene_name, events=queue.Queue(), detail='Uploading the plate')
 
         def work():
             try:
                 if sel['sequence']:
-                    folder = Path(tempfile.mkdtemp(prefix='mocap-detect-'))
-                    path, _, _ = plate_proxy.build_proxy(video, folder, first_index=snapshot['first_index'], last_index=snapshot['last_index'],
-                                                         long_edge=snapshot['max_side'], colorspace=snapshot['colorspace'], fps=snapshot['fps'])
-                    frame = 0
+                    _detect['events'].put(('detail', 'Preparing the first frames of the plate'))
+                    path, _, _ = sequence_proxy(video, snapshot['cache_root'], snapshot)
+                    frame = pick-pair
                 else:
-                    path, frame = video, sel['start_index']
+                    path, frame = video, sel['start_index']+pick
                 uploaded = client.upload(path)
                 _detect['events'].put(('detail', 'Detecting actors on the worker'))
                 result = client.detect(uploaded, frame, snapshot['max_side'], snapshot['fps_override'])
@@ -655,11 +788,21 @@ def poll_detect():
                 image.name = 'Mocap actor preview'
                 image.use_fake_user = True  # Kept when the .blend is saved, although nothing uses it.
                 image.pack()
-                path.unlink(missing_ok=True)
                 image.preview_ensure()
-                scene.mocap_comfy.detect_json = json.dumps(value)
-                if value['boxes'] and not 0 <= scene.mocap_comfy.actor_index < len(value['boxes']):
-                    scene.mocap_comfy.actor_index = value['largest']
+                for old in [im for im in bpy.data.images if im.name.startswith('Mocap actor ') and im.name != 'Mocap actor preview']:
+                    bpy.data.images.remove(old)
+                for index, crop in enumerate(value.pop('crops', [])):
+                    path.write_bytes(base64.b64decode(crop))
+                    thumb = bpy.data.images.load(str(path))
+                    thumb.name, thumb.use_fake_user = f'Mocap actor {index}', True
+                    thumb.pack()
+                    thumb.preview_ensure()
+                path.unlink(missing_ok=True)
+                settings = scene.mocap_comfy
+                settings.detect_json = json.dumps(value)
+                if value['boxes'] and not 0 <= settings.actor_index < len(value['boxes']):
+                    settings.actor_index = value['largest']
+                settings.actor_selection = json.dumps([settings.actor_index] if value['boxes'] else [])
             break
     for screen in bpy.data.screens:
         for area in screen.areas:
@@ -671,11 +814,44 @@ def poll_detect():
 class MOCAP_OT_pick_actor(Operator):
     bl_idname = 'mocap_comfy.pick_actor'
     bl_label = 'Pick Actor'
-    bl_description = 'Process this actor'
+    bl_description = 'Process this actor. Shift+click adds or removes actors: Submit queues one job per selected actor'
     index: IntProperty()
+    extend: BoolProperty(options={'SKIP_SAVE'})
+
+    def invoke(self, context, event):
+        self.extend = event.shift
+        return self.execute(context)
 
     def execute(self, context):
-        context.scene.mocap_comfy.actor_index = self.index
+        settings = context.scene.mocap_comfy
+        chosen = json.loads(settings.actor_selection or '[]')
+        if self.extend:
+            chosen = [a for a in chosen if a != self.index] if self.index in chosen else sorted(chosen+[self.index])
+        else:
+            chosen = [self.index]
+        settings.actor_selection = json.dumps(chosen)
+        if chosen:
+            settings.actor_index = self.index if self.index in chosen else chosen[0]
+        return {'FINISHED'}
+
+
+class MOCAP_OT_pick_current_frame(Operator):
+    bl_idname = 'mocap_comfy.pick_current_frame'
+    bl_label = 'Pick on Current Frame'
+    bl_description = 'Detect and pick actors on the frame shown in the timeline (choose a frame where your actor is clearly visible)'
+
+    def execute(self, context):
+        settings = context.scene.mocap_comfy
+        try:
+            sel = selection(settings)
+        except ValueError as exc:
+            self.report({'ERROR'}, str(exc))
+            return {'CANCELLED'}
+        frame = sel['first']+context.scene.frame_current-timeline_start(settings, sel)
+        if not sel['first'] <= frame <= sel['last']:
+            self.report({'ERROR'}, f'The current frame is outside the selected range {sel["first"]}–{sel["last"]}')
+            return {'CANCELLED'}
+        settings.pick_frame = frame
         return {'FINISHED'}
 
 
@@ -804,7 +980,7 @@ class MOCAP_OT_import_file(Operator, ImportHelper):
     def execute(self, context):
         settings = context.scene.mocap_comfy
         try:
-            video = bpy.path.abspath(settings.video) if settings.video else ''
+            video = plate_file(settings.video)
             import_bundle(self.filepath, settings.frame_start, settings.include_mesh, video if Path(video).suffix.lower() in VIDEO_SUFFIXES else '',
                           camera_view=settings.camera_view, include_rig=settings.include_rig)
         except Exception as exc:
@@ -887,7 +1063,7 @@ class MOCAP_OT_export_nuke(Operator):
     def invoke(self, context, event):
         settings = context.scene.mocap_comfy
         if settings.nuke_dir:
-            self.directory = bpy.path.abspath(settings.nuke_dir)
+            self.directory = plate_file(settings.nuke_dir)
             return self.execute(context)
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
@@ -1046,12 +1222,23 @@ class MOCAP_PT_footage(SubPanel, Panel):
         layout.label(text=text, icon=icon)
         if info.get('sequence'):
             layout.prop(settings, 'plate_colorspace', text='Colour')
+            hint(layout, 'Primaries declared in the EXR header' if info.get('declared_colorspace') == settings.plate_colorspace else
+                 'The files do not declare their primaries: check the plate colour space', width, 'INFO')
         elif settings.camera_mode != 'SCENE':
             layout.prop(settings, 'frame_start')
         layout.separator()
+        try:
+            sel = selection(settings)
+        except ValueError:
+            sel = None
         row = layout.row(align=True)
+        row.prop(settings, 'pick_frame')
+        row.operator('mocap_comfy.pick_current_frame', text='', icon='TIME')
+        if sel and pick_index(settings, sel) == 0 and settings.pick_frame != sel['first']:
+            hint(layout, f"Picking on the first frame ({sel['first']})", width)
+        row = layout.row(align=True)
+        row.scale_y = 1.2
         row.operator('mocap_comfy.detect', icon='VIEWZOOM', text='Detecting…' if _detect else 'Detect Actors')
-        row.prop(settings, 'actor_index', text='Actor')
         if _detect:
             hint(layout, _detect['detail'], width)
         detected = loads(settings.detect_json)
@@ -1068,18 +1255,28 @@ class MOCAP_PT_footage(SubPanel, Panel):
             image = bpy.data.images.get('Mocap actor preview')
             if image is not None:
                 # Previews are not saved with the .blend; regenerate after reopening.
-                layout.template_icon(icon_value=image.preview_ensure().icon_id, scale=9)
+                layout.template_icon(icon_value=image.preview_ensure().icon_id, scale=7)
             if not current:
-                hint(layout, 'Preview is for another plate, range or size; detect again', width, 'ERROR')
+                hint(layout, 'Detection is for another plate, range, pick frame or size; detect again', width, 'ERROR')
             elif not detected['boxes']:
-                layout.label(text='No person on this frame; change First', icon='ERROR')
-            grid = layout.grid_flow(columns=4, even_columns=True, align=True)
+                layout.label(text='No person on this frame; change the pick frame', icon='ERROR')
+            chosen = json.loads(settings.actor_selection or '[]')
+            grid = layout.grid_flow(columns=3, even_columns=True, align=False)
             for index in range(len(detected['boxes'])):
-                grid.operator('mocap_comfy.pick_actor', text=str(index), depress=settings.actor_index == index).index = index
+                cell = grid.column(align=True)
+                thumb = bpy.data.images.get(f'Mocap actor {index}')
+                if thumb is not None:
+                    cell.template_icon(icon_value=thumb.preview_ensure().icon_id, scale=4.5)
+                cell.operator('mocap_comfy.pick_actor', text=f'Actor {index}', depress=index in chosen).index = index
+            if current and chosen:
+                hint(layout, (f"Actor {chosen[0]} selected" if len(chosen) == 1 else
+                              f"Actors {', '.join(map(str, chosen))}: {len(chosen)} jobs") + ' · Shift+click to add more', width, 'CHECKMARK')
             if image is not None:
                 layout.operator('mocap_comfy.show_actors', icon='WINDOW')
         else:
-            hint(layout, 'Detect Actors shows numbered people on the first frame. Without it: 0, 1, 2 left to right; -1 = largest.', width)
+            layout.prop(settings, 'actor_index', text='Actor')
+            hint(layout, 'Detect Actors shows a close-up of each person on the pick frame. Without it: 0, 1, 2 left to right; -1 = largest.', width)
+        layout.prop(settings, 'trim_to_actor')
 
 
 class MOCAP_PT_camera(SubPanel, Panel):
@@ -1119,11 +1316,15 @@ class MOCAP_PT_camera(SubPanel, Panel):
             column.alert = True
             for line in textwrap.wrap(issue, width):
                 column.label(text=line)
+        layout.prop(settings, 'scene_placement')
         column = layout.column(align=True)
+        column.active = settings.scene_placement != 'plate'
         column.prop(settings, 'plate_lock')
         column.prop(settings, 'orientation_lock')
         column.prop(settings, 'plate_lock_smoothing')
-        hint(layout, "World motion stays GVHMR's. Plate lock slides the body sideways (never in depth); rotation lock turns it toward the plate. Rotation lock 1 fits best on plate-critical shots.", width)
+        hint(layout, "Auto keeps GVHMR's world motion when it agrees with the solved camera (pans, handheld) and follows the plate with smoothed depth "
+                     "when the camera travels (dolly, truck, crane), which GVHMR cannot represent. The locks apply to GVHMR world motion: plate lock slides "
+                     "the body sideways (never in depth), rotation lock turns it toward the plate.", width)
 
 
 class MOCAP_PT_process(SubPanel, Panel):
@@ -1238,7 +1439,7 @@ def stop_monitoring(_):
             bpy.app.timers.unregister(timer)
 
 
-CLASSES = (MocapPreferences, MocapJob, MocapSettings, MOCAP_OT_check, MOCAP_OT_submit, MOCAP_OT_full_clip, MOCAP_OT_detect, MOCAP_OT_pick_actor,
+CLASSES = (MocapPreferences, MocapJob, MocapSettings, MOCAP_OT_check, MOCAP_OT_submit, MOCAP_OT_full_clip, MOCAP_OT_detect, MOCAP_OT_pick_actor, MOCAP_OT_pick_current_frame,
            MOCAP_OT_show_actors, MOCAP_OT_use_scene_camera, MOCAP_OT_resume, MOCAP_OT_cancel, MOCAP_OT_import_job, MOCAP_OT_remove_job,
            MOCAP_OT_import_file, MOCAP_OT_open_job_log, MOCAP_OT_review_camera, MOCAP_OT_pose_rig, MOCAP_OT_export_nuke,
            MOCAP_OT_live_log, MOCAP_OT_close_log, MOCAP_UL_jobs, MOCAP_PT_panel, MOCAP_PT_worker, MOCAP_PT_footage, MOCAP_PT_camera,

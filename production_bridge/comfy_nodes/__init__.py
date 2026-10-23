@@ -39,6 +39,9 @@ class MocapProcessVideo:
             'progress_id': ('STRING', {'default': ''}),
             'scene_camera': ('STRING', {'default': '', 'tooltip': 'Uploaded scene-camera JSON from the Blender add-on (solved camera)'}),
             'actor_box': ('STRING', {'default': '', 'tooltip': 'Normalized [x1,y1,x2,y2] picked in the actor preview'}),
+            'seed_frame': ('INT', {'default': 0, 'min': 0, 'max': 100000, 'tooltip': 'Frame of the range (0 = first) where the actor was picked'}),
+            'scene_placement': (['auto', 'world', 'plate'], {'default': 'auto', 'tooltip': 'Solved camera: GVHMR world motion, or follow the plate (camera travels)'}),
+            'trim_to_actor': ('BOOLEAN', {'default': True, 'tooltip': 'Process only the frames where the picked actor is visible instead of failing'}),
             'plate_lock': ('FLOAT', {'default': 1., 'min': 0., 'max': 1.}),
             'plate_lock_smoothing': ('FLOAT', {'default': 3., 'min': 0., 'max': 12.}),
             'orientation_lock': ('FLOAT', {'default': .5, 'min': 0., 'max': 1.}),
@@ -96,6 +99,7 @@ class MocapProcessVideo:
             command = [PYTHON, '-u', str(BRIDGE/'worker.py'), '--study', str(STUDY), '--job-root', str(work), '--video', str(source), '--options', str(config), '--output', str(bundle)]
             if camera is not None:
                 command += ['--camera', str(camera)]
+            command += ['--prepared-cache', str(Path(folder_paths.get_output_directory())/'mocap'/'prepared')]
             env = dict(os.environ, OMP_NUM_THREADS='2', OPENBLAS_NUM_THREADS='1', MKL_NUM_THREADS='2', HF_HUB_DISABLE_TELEMETRY='1', DO_NOT_TRACK='1', MOCAP_STATUS_FILE=str(work/'status.json'), PYTHONUNBUFFERED='1')
             with (output/'job.log').open('w') as log:
                 child = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, env=env, start_new_session=True)

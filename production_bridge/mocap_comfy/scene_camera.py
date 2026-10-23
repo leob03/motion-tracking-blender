@@ -31,7 +31,9 @@ def vipe_timing(camera):
     except (ValueError, KeyError, TypeError):
         return None
     start = int(job.get('vipe_start_frame', 1))
+    plate_first = job.get('vipe_plate_first_frame')
     return dict(zero_frame=start-first, first_source=first, count=count, start=start, distortion=bool(job.get('vipe_distortion')),
+                plate_first_frame=int(plate_first) if plate_first is not None else None,
                 width=manifest.get('source', {}).get('width'), height=manifest.get('source', {}).get('height'))
 
 

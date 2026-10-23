@@ -178,40 +178,103 @@ def mesh_cache(collection, name, vertices, faces, start, relative=False):
     return obj
 
 
-def add_background(camera, video, start, source_start, count):
-    """Movie clip, or a numbered image sequence (local proxy frames of a sequence plate)."""
-    path = Path(video)
+PLATE_NODES = 'Mocap '
+
+
+def plate_clip(video, range_start, start, source_start):
+    """Movie, or numbered image sequence (local proxy frames), as a MovieClip on the job timeline.
+
+    range_start: timeline frame of the requested range's first frame (the proxy's first file);
+    start/source_start: timeline frame and source index of the result's first frame.
+    """
+    clip = bpy.data.movieclips.load(str(Path(video).resolve()), check_existing=True)
+    # A sequence clip plays its files in order from the loaded number; a movie's frame 1 is source frame 0.
+    clip.frame_start = range_start if clip.source == 'SEQUENCE' else start-source_start
+    return clip
+
+
+def add_background(camera, clip):
     data = camera.data
     background = data.background_images.new()
-    if path.suffix.lower() in IMAGE_SUFFIXES:
-        image = bpy.data.images.load(str(path.resolve()), check_existing=True)
-        image.source = 'SEQUENCE'
-        background.source = 'IMAGE'
-        background.image = image
-        number = int(re.search(r'(\d+)\.[^.]+$', path.name).group(1))
-        background.image_user.frame_start = start
-        background.image_user.frame_offset = number-1
-        background.image_user.frame_duration = count
-    else:
-        clip = bpy.data.movieclips.load(str(path.resolve()), check_existing=True)
-        clip.frame_start = start-source_start
-        background.source = 'MOVIE_CLIP'
-        background.clip = clip
+    background.source = 'MOVIE_CLIP'
+    background.clip = clip
     background.frame_method = 'STRETCH'
+    background.display_depth = 'BACK'
     background.alpha = .65
     data.show_background_images = True
 
 
+def plate_compositor(scene, clip):
+    """Composite the plate under renders and Rendered view (camera backgrounds are viewport-only).
+
+    Same layout as the ViPE add-on; an artist's own compositor setup is never replaced.
+    """
+    if not hasattr(scene, 'node_tree'):
+        return False
+    owned = lambda tree: all(n.type in ('R_LAYERS', 'COMPOSITE') or n.name.startswith(('ViPE ', PLATE_NODES)) for n in tree.nodes)
+    if scene.node_tree is not None and scene.use_nodes and not owned(scene.node_tree):
+        return False
+    scene.use_nodes = True
+    tree = scene.node_tree
+    for node in [n for n in tree.nodes if n.name.startswith(('ViPE ', PLATE_NODES)) or n.type in ('R_LAYERS', 'COMPOSITE')]:
+        tree.nodes.remove(node)
+    def add(kind, name, x, y=0):
+        node = tree.nodes.new(kind)
+        node.name = node.label = PLATE_NODES+name
+        node.location = (x, y)
+        return node
+    layers = add('CompositorNodeRLayers', 'Render', -500, -300)
+    plate = add('CompositorNodeMovieClip', 'Plate', -700)
+    plate.clip = clip
+    scale = add('CompositorNodeScale', 'Plate to render size', -300)
+    scale.space, scale.frame_method = 'RENDER_SIZE', 'STRETCH'
+    tree.links.new(plate.outputs['Image'], scale.inputs['Image'])
+    over = add('CompositorNodeAlphaOver', 'Render over plate', -50)
+    tree.links.new(scale.outputs['Image'], over.inputs[1])
+    tree.links.new(layers.outputs['Image'], over.inputs[2])
+    composite = add('CompositorNodeComposite', 'Composite', 200)
+    tree.links.new(over.outputs['Image'], composite.inputs['Image'])
+    viewer = add('CompositorNodeViewer', 'Viewer', 200, -200)
+    tree.links.new(over.outputs['Image'], viewer.inputs['Image'])
+    scene.render.film_transparent = True
+    scene.view_settings.view_transform = 'Standard'
+    scene.view_settings.look = 'None'
+    return True
+
+
+def frame_timelines():
+    """Fit Timeline/Dope Sheet and Graph Editors to the imported frames."""
+    for window in bpy.context.window_manager.windows:
+        for area in window.screen.areas:
+            operator = {'DOPESHEET_EDITOR': 'action', 'GRAPH_EDITOR': 'graph'}.get(area.type)
+            region = next((r for r in area.regions if r.type == 'WINDOW'), None)
+            if operator is None or region is None:
+                continue
+            try:
+                with bpy.context.temp_override(window=window, area=area, region=region):
+                    getattr(bpy.ops, operator).view_all()
+            except RuntimeError:
+                pass
+
+
 def summary_lines(manifest, start, scene_camera):
     n = manifest['frames']
-    lines = [f"{manifest['rig']['type'] if manifest.get('rig') else manifest['method']} · {n} frames · timeline {start}–{start+n-1}",
+    trimmed = manifest.get('trimmed')
+    lines = [f"Trimmed to plate frames {trimmed['used'][0]}–{trimmed['used'][1]} of {trimmed['requested'][0]}–{trimmed['requested'][1]}: {trimmed['reason']}"] if trimmed else []
+    lines += [f"{manifest['rig']['type'] if manifest.get('rig') else manifest['method']} · {n} frames · timeline {start}–{start+n-1}",
              f"Face: {manifest.get('face_capture', 'none').replace('_', ' ')} · {manifest['rig']['bones'] if manifest.get('rig') else 0} bones"]
     info = manifest.get('scene_camera')
     if info:
         error = info.get('plate_error_px', {})
         registration = info.get('registration', {})
         lines.append(f"Camera: {scene_camera or info.get('name')} (solved) · plate error {error.get('mean_px', 0):.1f} px mean, {error.get('p95_px', 0):.1f} px p95")
-        lines.append(f"World fit residual {registration.get('residual_median_m', 0)*100:.1f} cm · plate lock up to {info.get('plate_lock', {}).get('max_offset_m', 0)*100:.0f} cm · rotation lock {info.get('orientation_lock', 0):.1f}")
+        if info.get('placement') == 'plate-anchored':
+            anchored = info.get('anchored', {})
+            lines.append(f"Body follows the plate: the camera travels, which GVHMR's world motion cannot represent "
+                         f"(world fit off by {registration.get('residual_median_m', 0):.1f} m). Depth smoothed over {anchored.get('depth_smoothing_seconds', 0):.2f} s")
+        else:
+            lines.append(f"GVHMR world motion · world fit residual {registration.get('residual_median_m', 0)*100:.1f} cm · plate lock up to "
+                         f"{info.get('plate_lock', {}).get('max_offset_m', 0)*100:.0f} cm · rotation lock {info.get('orientation_lock', 0):.1f}")
         if info.get('gravity_tilt_degrees', 0) > 5:
             lines.append(f"GVHMR gravity is {info['gravity_tilt_degrees']:.0f}° from the scene's up axis: set the floor (ViPE scene alignment) if the scene should be ground-aligned")
     else:
@@ -224,7 +287,12 @@ def summary_lines(manifest, start, scene_camera):
 
 
 def import_bundle(path, start=1001, include_mesh=True, video='', scene=None, camera_view='WORLD', include_rig=True, plate=None):
+    """start: timeline frame of the job's requested first frame (the result may begin later when trimmed to the actor)."""
     manifest, arrays = read_bundle(path)
+    range_start = start
+    requested = ((plate or {}).get('options') or {}).get('start_frame')
+    if requested is not None:
+        start = range_start+manifest['source_start_frame']-requested
     scene = scene or bpy.context.scene
     source_name = (plate or {}).get('video') or video or manifest.get('source', 'Shot')
     stem = Path(source_name).stem
@@ -243,7 +311,7 @@ def import_bundle(path, start=1001, include_mesh=True, video='', scene=None, cam
     collection['frames'] = int(manifest['frames'])
     if plate and plate.get('plate'):
         collection['plate_pattern'] = str(Path(plate['video']).parent/plate['plate']['pattern'])
-        collection['plate_first_frame'] = int(plate['plate']['first_frame'])
+        collection['plate_first_frame'] = int(plate['plate']['first_frame'])+start-range_start  # file number of the result's first frame
     elif video and Path(video).suffix.lower() not in IMAGE_SUFFIXES:
         collection['plate_movie'] = str(Path(video).resolve())
         collection['source_start_frame'] = int(manifest['source_start_frame'])
@@ -305,14 +373,17 @@ def import_bundle(path, start=1001, include_mesh=True, video='', scene=None, cam
             cameras[-1]['mocap_camera_role'] = 'VIDEO'
             cameras[-1]['description'] = 'Preserves this actor’s SAM projection after hybrid world placement. Actor-specific; not a shared scene matchmove.'
         scene.camera = cameras[-1] if camera_view == 'VIDEO' else cameras[0]
+    clip = plate_clip(video, range_start, start, manifest['source_start_frame']) if video and Path(video).is_file() else None
     for camera in cameras:
         if camera is existing:
             continue
         camera.data.display_size = .15
         if camera.name in scene.objects:
             camera.hide_set(False)
-        if video and Path(video).is_file():
-            add_background(camera, video, start, manifest['source_start_frame'], n)
+        if clip is not None:
+            add_background(camera, clip)
+    if clip is not None and existing is None:
+        collection['plate_composited'] = plate_compositor(scene, clip)
     arm = None
     if include_rig and 'rig_pose' in arrays:
         arm = create_armature(children['actor'], shot+' · '+manifest['track_id']+' · Rig', arrays, Y_UP_TO_Z_UP, start)
@@ -333,6 +404,7 @@ def import_bundle(path, start=1001, include_mesh=True, video='', scene=None, cam
     collection['rig_note'] = 'Native bones with captured surface correctives' if arm else 'Cache only; submit a new job to obtain native bones' if include_rig else 'Rig import disabled'
     collection['summary'] = json.dumps(dict(lines=summary_lines(manifest, start, collection.get('scene_camera'))+[collection['rig_note']]))
     scene.frame_set(start)
+    frame_timelines()
     if arm:
         for obj in bpy.context.selected_objects:
             obj.select_set(False)
