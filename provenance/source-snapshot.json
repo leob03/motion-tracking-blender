@@ -45,8 +45,8 @@
     },
     {
       "path": "production_bridge/mocap_comfy/__init__.py",
-      "sha256": "780f567c4d7d7792ba7cbb8ba2ef3ac4de510a95d8476f8af57f8d9b61b57440",
-      "bytes": 69245
+      "sha256": "b71c51ce196bf4c8b5bd970c03fcb5dd611ff06822f50e6ff49daa1ab0ce53b8",
+      "bytes": 69332
     },
     {
       "path": "production_bridge/mocap_comfy/client.py",
