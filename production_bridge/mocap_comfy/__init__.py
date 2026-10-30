@@ -162,6 +162,7 @@ def probe_plate(settings, context):
                                               fps_rational=list(seq['fps']) if seq['fps'] else None, first=seq['first'], last=seq['last'],
                                               pattern=seq['pattern'], gaps=seq['gaps'], pixel_aspect=seq['pixel_aspect'], declared_colorspace=declared))
         settings.first_frame, settings.last_frame = seq['first'], seq['last']
+        settings.pick_frame = seq['first']
         return
     if path.suffix.lower() not in VIDEO_SUFFIXES:
         settings.plate_info = json.dumps({'error': 'Choose a movie (MP4, MOV, MKV, AVI, WebM, M4V) or one frame of an image sequence'})
@@ -178,6 +179,7 @@ def probe_plate(settings, context):
             bpy.data.movieclips.remove(clip)
     settings.plate_info = json.dumps(info)
     settings.first_frame, settings.last_frame = 1, info.get('frames', 0)
+    settings.pick_frame = 1
 
 
 def scene_camera_poll(settings, obj):
@@ -1261,7 +1263,7 @@ class MOCAP_PT_footage(SubPanel, Panel):
             elif not detected['boxes']:
                 layout.label(text='No person on this frame; change the pick frame', icon='ERROR')
             chosen = json.loads(settings.actor_selection or '[]')
-            grid = layout.grid_flow(columns=3, even_columns=True, align=False)
+            grid = layout.grid_flow(row_major=True, columns=3, even_columns=True, align=False)
             for index in range(len(detected['boxes'])):
                 cell = grid.column(align=True)
                 thumb = bpy.data.images.get(f'Mocap actor {index}')

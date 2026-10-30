@@ -209,14 +209,20 @@ def plate_compositor(scene, clip):
 
     Same layout as the ViPE add-on; an artist's own compositor setup is never replaced.
     """
-    if not hasattr(scene, 'node_tree'):
+    blender5 = 'compositing_node_group' in bpy.types.Scene.bl_rna.properties  # Blender 5: compositor is a node group
+    owned = lambda tree: all(n.type in ('R_LAYERS', 'COMPOSITE', 'GROUP_OUTPUT') or n.name.startswith(('ViPE ', PLATE_NODES)) for n in tree.nodes)
+    existing = scene.compositing_node_group if blender5 else (scene.node_tree if scene.use_nodes else None)
+    if existing is not None and not owned(existing):
         return False
-    owned = lambda tree: all(n.type in ('R_LAYERS', 'COMPOSITE') or n.name.startswith(('ViPE ', PLATE_NODES)) for n in tree.nodes)
-    if scene.node_tree is not None and scene.use_nodes and not owned(scene.node_tree):
-        return False
-    scene.use_nodes = True
-    tree = scene.node_tree
-    for node in [n for n in tree.nodes if n.name.startswith(('ViPE ', PLATE_NODES)) or n.type in ('R_LAYERS', 'COMPOSITE')]:
+    if blender5:
+        tree = existing or bpy.data.node_groups.new(PLATE_NODES + 'compositor', 'CompositorNodeTree')
+        scene.compositing_node_group = tree
+        if not any(i.item_type == 'SOCKET' and i.in_out == 'OUTPUT' and i.name == 'Image' for i in tree.interface.items_tree):
+            tree.interface.new_socket('Image', in_out='OUTPUT', socket_type='NodeSocketColor')
+    else:
+        scene.use_nodes = True
+        tree = scene.node_tree
+    for node in [n for n in tree.nodes if n.name.startswith(('ViPE ', PLATE_NODES)) or n.type in ('R_LAYERS', 'COMPOSITE', 'GROUP_OUTPUT')]:
         tree.nodes.remove(node)
     def add(kind, name, x, y=0):
         node = tree.nodes.new(kind)
@@ -227,12 +233,15 @@ def plate_compositor(scene, clip):
     plate = add('CompositorNodeMovieClip', 'Plate', -700)
     plate.clip = clip
     scale = add('CompositorNodeScale', 'Plate to render size', -300)
-    scale.space, scale.frame_method = 'RENDER_SIZE', 'STRETCH'
+    if blender5:  # node options became menu sockets
+        scale.inputs['Type'].default_value, scale.inputs['Frame Type'].default_value = 'Render Size', 'Stretch'
+    else:
+        scale.space, scale.frame_method = 'RENDER_SIZE', 'STRETCH'
     tree.links.new(plate.outputs['Image'], scale.inputs['Image'])
     over = add('CompositorNodeAlphaOver', 'Render over plate', -50)
-    tree.links.new(scale.outputs['Image'], over.inputs[1])
-    tree.links.new(layers.outputs['Image'], over.inputs[2])
-    composite = add('CompositorNodeComposite', 'Composite', 200)
+    tree.links.new(scale.outputs['Image'], over.inputs['Background'] if blender5 else over.inputs[1])
+    tree.links.new(layers.outputs['Image'], over.inputs['Foreground'] if blender5 else over.inputs[2])
+    composite = add('NodeGroupOutput' if blender5 else 'CompositorNodeComposite', 'Composite', 200)
     tree.links.new(over.outputs['Image'], composite.inputs['Image'])
     viewer = add('CompositorNodeViewer', 'Viewer', 200, -200)
     tree.links.new(over.outputs['Image'], viewer.inputs['Image'])
