@@ -1,7 +1,7 @@
 {
   "date": "2026-11-18",
-  "addon_version": "0.7.0",
-  "note": "Current source hashes for 0.7.0 (SAM 3D Body on camera, locked-off lens, Level from Actor). Original preserved snapshot remains at Git tag v0.3.1; model assets and generated results are excluded.",
+  "addon_version": "0.7.1",
+  "note": "Current source hashes for 0.7.1 (0.7.0 SAM 3D Body on camera, locked-off lens, Level from Actor; 0.7.1 worker node accepts it). Original preserved snapshot remains at Git tag v0.3.1; model assets and generated results are excluded.",
   "files": [
     {
       "path": "production_bridge/worker.py",
@@ -45,13 +45,13 @@
     },
     {
       "path": "production_bridge/mocap_comfy/__init__.py",
-      "sha256": "9c8994404a977ac19132a04f0ef4c7a36a1ec73069a4fa015b0d071e0a5938b2",
+      "sha256": "211e0bb63a95af1d85ef3036d302a9e44475d3ed57e8bbdd19a18124c0f105e4",
       "bytes": 75397
     },
     {
       "path": "production_bridge/mocap_comfy/client.py",
-      "sha256": "7466a759bf20c4852e40e231530e32d2bad7250b0634046071f8e32874ff0da7",
-      "bytes": 12277
+      "sha256": "4e9d59c5e62ade4adc4776515f74b7af207108ba9670cb144b11839839737a1b",
+      "bytes": 12769
     },
     {
       "path": "production_bridge/mocap_comfy/importer.py",
@@ -70,8 +70,8 @@
     },
     {
       "path": "production_bridge/comfy_nodes/__init__.py",
-      "sha256": "a6d3afa463929e88f119480688eec7e4ad8fd2c0ccc364756665e493f4e4908b",
-      "bytes": 10702
+      "sha256": "2d6014d378552bc99164f029d788aec37c96cde02525991a9f5e756f59978580",
+      "bytes": 11597
     },
     {
       "path": "production_bridge/comfy_nodes/progress_api.py",
@@ -120,8 +120,8 @@
     },
     {
       "path": "production_bridge/tests/run_api_job.py",
-      "sha256": "045a4e741d2826c3a75a768fbb28c98cb2d5755ca3f346d54737b032f414eed4",
-      "bytes": 2167
+      "sha256": "a9e96580e6b62663f34a0e7a48a59bab4ffc9bc28819135d74616e2ae8a1c90a",
+      "bytes": 2757
     },
     {
       "path": "production_bridge/tests/blender_log_view.py",
