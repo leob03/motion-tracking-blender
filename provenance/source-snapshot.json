@@ -1,17 +1,17 @@
 {
-  "date": "2026-10-22",
-  "addon_version": "0.6.3",
-  "note": "Current source hashes for 0.6.0 (image sequences, scene camera, warm models, Nuke export). Original preserved snapshot remains at Git tag v0.3.1; model assets and generated results are excluded.",
+  "date": "2026-11-18",
+  "addon_version": "0.7.0",
+  "note": "Current source hashes for 0.7.0 (SAM 3D Body on camera, locked-off lens, Level from Actor). Original preserved snapshot remains at Git tag v0.3.1; model assets and generated results are excluded.",
   "files": [
     {
       "path": "production_bridge/worker.py",
-      "sha256": "0b31277b277d80d7a7afeab9ce5efa2eb1b6346123872fe7d2871205e55b7bae",
-      "bytes": 36965
+      "sha256": "f7e893409cdf44cc7aa57fab568744396183695aff4df06670aa202dcb9f0fc8",
+      "bytes": 48746
     },
     {
       "path": "production_bridge/face_worker.py",
-      "sha256": "8cf5541321988eb6a1ef459d8af661aa1f5d12b8cc143308f9c650d37f226575",
-      "bytes": 8377
+      "sha256": "876b478321b9bf4fd7adbf0fe7d5bd49d1741763a0ed60b57802562211d50c81",
+      "bytes": 8601
     },
     {
       "path": "production_bridge/rig_export.py",
@@ -45,8 +45,8 @@
     },
     {
       "path": "production_bridge/mocap_comfy/__init__.py",
-      "sha256": "b71c51ce196bf4c8b5bd970c03fcb5dd611ff06822f50e6ff49daa1ab0ce53b8",
-      "bytes": 69332
+      "sha256": "9c8994404a977ac19132a04f0ef4c7a36a1ec73069a4fa015b0d071e0a5938b2",
+      "bytes": 75397
     },
     {
       "path": "production_bridge/mocap_comfy/client.py",
@@ -55,8 +55,8 @@
     },
     {
       "path": "production_bridge/mocap_comfy/importer.py",
-      "sha256": "f7886ec8867b7b2b27ecaee3328db5b877210ab3868f856698ebd3a7e5a81832",
-      "bytes": 23044
+      "sha256": "2f9cc90777420a1a6c607d47643b23ee5f8b7fce9db85055dc8169fc7fda290a",
+      "bytes": 25598
     },
     {
       "path": "production_bridge/mocap_comfy/rig.py",
@@ -80,8 +80,8 @@
     },
     {
       "path": "comparison_study/run_model.py",
-      "sha256": "7eb24848db3b0cff67de0dcfb19d273fd0ed1f6f1c091c191857a5399e0f445b",
-      "bytes": 19285
+      "sha256": "c00d1073f2080fec80e90a953d969947ecc7cb0f632dbfe9125d2bb7d1db8e09",
+      "bytes": 24789
     },
     {
       "path": "comparison_study/character_selection.py",
@@ -200,8 +200,8 @@
     },
     {
       "path": "production_bridge/tests/blender_vipe_handoff.py",
-      "sha256": "d37001cfddfa53982c1204ef92ef9b17058c8d88771032bf4b05bd6a466f19bd",
-      "bytes": 5489
+      "sha256": "9e90ac7e9933293011f38b4738297841ae6f0d994033fc59a20a8634d46447fe",
+      "bytes": 5729
     },
     {
       "path": "production_bridge/tests/blender_addon_flow.py",
@@ -252,6 +252,96 @@
       "path": "production_bridge/tests/tracking_reviewed.py",
       "sha256": "8ddc45a778a32c598354e234282de5cbf91f0e950e637b3b5e0ee9d467b3ec4d",
       "bytes": 1797
+    },
+    {
+      "path": "production_bridge/sam_camera.py",
+      "sha256": "1d21a7c18b7307bf68829ad1097412fe38a150230e5fbe754a51e099f3a7d33b",
+      "bytes": 19109
+    },
+    {
+      "path": "production_bridge/lens_estimate.py",
+      "sha256": "b59fc1cc690ff26f4dd4549af797aa64c7524261f9e72bddfddce9a4970f7572",
+      "bytes": 3473
+    },
+    {
+      "path": "production_bridge/third_party/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "production_bridge/mocap_comfy/plate_lens.py",
+      "sha256": "5f4cc1cd02f0dc5f0c4270e478d36d1564e96ad0c959c15861948af5bfc38ff2",
+      "bytes": 3884
+    },
+    {
+      "path": "production_bridge/mocap_comfy/level.py",
+      "sha256": "66f7c87e10ad616c45be2e8c2ce2ca10a31a44275c6484ca418720e5d3fcd27e",
+      "bytes": 9891
+    },
+    {
+      "path": "production_bridge/tests/sam_camera_placement.py",
+      "sha256": "136e7a668cb532cec4c7c30a6e861ee947b9e906893e149f0023e3725e388eef",
+      "bytes": 4613
+    },
+    {
+      "path": "production_bridge/tests/blender_panel_smoke.py",
+      "sha256": "ad29937068d6658b48d8d26e2af9e81e4a31a39a3f1a87f756e61bcb74cd3c56",
+      "bytes": 3105
+    },
+    {
+      "path": "production_bridge/third_party/geocalib/LICENSE.md",
+      "sha256": "e6b38ff3477c7485b75648af9428d3aa32c89a0b10da4be8daf24261c905956c",
+      "bytes": 10983
+    },
+    {
+      "path": "production_bridge/third_party/geocalib/__init__.py",
+      "sha256": "41431d34f38f06048649d668b7f1b8c3962fcb731da214cf5945b2dd8d052705",
+      "bytes": 216
+    },
+    {
+      "path": "production_bridge/third_party/geocalib/camera.py",
+      "sha256": "c1c6afa291a33e5f0f2ef35fdbe95e4d6467dd38514b6367246333be88aba406",
+      "bytes": 37667
+    },
+    {
+      "path": "production_bridge/third_party/geocalib/extractor.py",
+      "sha256": "3e60c31fcc67be48049e776980490d0fbf7b480e0bac26663b6f4910fa736c6a",
+      "bytes": 5114
+    },
+    {
+      "path": "production_bridge/third_party/geocalib/geocalib.py",
+      "sha256": "32e807b772400b6c4ddea964171c5b1a0d24ac95a1bf70c9abb39e3c882d6daf",
+      "bytes": 5548
+    },
+    {
+      "path": "production_bridge/third_party/geocalib/gravity.py",
+      "sha256": "e8b5c079af91788518d695f14a79a52007d56dea4b2788a5bd59adff4c4699c7",
+      "bytes": 4546
+    },
+    {
+      "path": "production_bridge/third_party/geocalib/lm_optimizer.py",
+      "sha256": "406fbb656b1592307073bcb90b502e3426a5b9b5d2ba3d08744ed054bb9c4567",
+      "bytes": 24588
+    },
+    {
+      "path": "production_bridge/third_party/geocalib/misc.py",
+      "sha256": "51f3c36b6a0988075de0009b43e66ef99fb4c210b8a0cec753aaea0ed577eef2",
+      "bytes": 10622
+    },
+    {
+      "path": "production_bridge/third_party/geocalib/modules.py",
+      "sha256": "b53bd6104a2b3032961e279f882e9e54b895f8709278f69369f353d9be4c4480",
+      "bytes": 19458
+    },
+    {
+      "path": "production_bridge/third_party/geocalib/perspective_fields.py",
+      "sha256": "4fc28c10dfa655dada9f58cbf123873521be7e89f9b62340be9e0c322317d49d",
+      "bytes": 13530
+    },
+    {
+      "path": "production_bridge/third_party/geocalib/utils.py",
+      "sha256": "cb87f01a58357d45ec53e009f80deacfdcc3d4de6ed1e7337b859f1bae5e1570",
+      "bytes": 11578
     }
   ]
 }

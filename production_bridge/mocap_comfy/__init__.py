@@ -1,5 +1,5 @@
 bl_info = {
-    'name': 'Mocap ComfyUI', 'author': 'Innovation', 'version': (0, 6, 3),
+    'name': 'Mocap ComfyUI', 'author': 'Innovation', 'version': (0, 7, 0),
     'blender': (4, 2, 0), 'location': '3D View > Sidebar > Mocap',
     'description': 'Submit footage to ComfyUI and import editable body rigs, mesh, and cameras',
     'category': 'Animation',
@@ -26,8 +26,9 @@ from bpy_extras.io_utils import ImportHelper
 from .client import ComfyClient, VIDEO_SUFFIXES
 from .importer import import_bundle, result_collection
 from .log_view import MOCAP_OT_live_log, MOCAP_OT_close_log, draw_log_header, find_log_area, refresh_log_views
-from . import plate_proxy, scene_camera
+from . import plate_lens, plate_proxy, scene_camera
 from .face import CLASSES as FACE_CLASSES
+from .level import CLASSES as LEVEL_CLASSES
 from .face_controls import CLASSES as VISUAL_CLASSES, register_visuals, unregister_visuals, stop_drag
 
 # Monitored jobs by local key; the scene's job list keeps what survives a restart.
@@ -38,8 +39,8 @@ STAGES = [('upload', 'Upload plate'), ('prepare', 'Detect and track actor'), ('g
           ('sam', 'SAM body and hands'), ('face', 'Face fit (FLAME)'), ('export', 'Build bundle'), ('download', 'Download'), ('import', 'Import')]
 PRESETS = {
     'QUICK': dict(method='gvhmr', hand_refinement=False, face_capture='none'),
-    'BODY_HANDS': dict(method='hybrid', hand_refinement=True, face_capture='none'),
-    'FULL_FACE': dict(method='hybrid', hand_refinement=True, face_capture='realdenseface_flame'),
+    'BODY_HANDS': dict(method='sam_camera', hand_refinement=True, face_capture='none'),
+    'FULL_FACE': dict(method='sam_camera', hand_refinement=True, face_capture='realdenseface_flame'),
 }
 SENSOR_PRESETS = [('FULL_FRAME', 'Full frame 36 mm', '', 36.0), ('ALEXA35', 'ARRI ALEXA 35 open gate 27.99 mm', '', 27.99),
                   ('ALEXA_LF', 'ARRI ALEXA LF open gate 36.70 mm', '', 36.70), ('S35', 'Super 35 24.89 mm', '', 24.89), ('CUSTOM', 'Custom', '', 0.0)]
@@ -87,6 +88,8 @@ def custom_changed(settings, context):
         settings.preset = preset
     if settings.method == 'gvhmr' and settings.face_capture != 'none':
         settings.face_capture = 'none'
+    if settings.method == 'sam_camera' and settings.camera_mode in ('ESTIMATE', 'FOCAL'):
+        settings.camera_mode = 'LOCKED'  # the new default method needs a tracked or locked-off camera
 
 
 def sensor_preset_changed(settings, context):
@@ -160,7 +163,8 @@ def probe_plate(settings, context):
             settings.plate_colorspace = declared
         settings.plate_info = json.dumps(dict(sequence=True, width=seq['width'], height=seq['height'], frames=seq['count'], fps=fps,
                                               fps_rational=list(seq['fps']) if seq['fps'] else None, first=seq['first'], last=seq['last'],
-                                              pattern=seq['pattern'], gaps=seq['gaps'], pixel_aspect=seq['pixel_aspect'], declared_colorspace=declared))
+                                              pattern=seq['pattern'], gaps=seq['gaps'], pixel_aspect=seq['pixel_aspect'], declared_colorspace=declared,
+                                              lens=plate_lens.read(path)))
         settings.first_frame, settings.last_frame = seq['first'], seq['last']
         settings.pick_frame = seq['first']
         return
@@ -227,10 +231,12 @@ class MocapSettings(PropertyGroup):
     detect_json: StringProperty(options={'HIDDEN'})
     # Processing
     preset: EnumProperty(name='Quality', items=[('QUICK', 'Quick body (GVHMR)', 'Body and world motion only; fastest'),
-                                                ('BODY_HANDS', 'Body + hands', 'SAM body and fingers placed by GVHMR world motion'),
+                                                ('BODY_HANDS', 'Body + hands', 'SAM 3D Body and fingers placed on the tracked or locked-off camera'),
                                                 ('FULL_FACE', 'Body + hands + face', 'Adds RealDenseFace/FLAME head with editable expressions; slowest'),
                                                 ('CUSTOM', 'Custom', 'Settings below were changed')], default='BODY_HANDS', update=preset_changed)
-    method: EnumProperty(name='Body method', items=[('hybrid', 'SAM + GVHMR world/root', 'SAM body, optional hands/face, GVHMR hip position and root rotation'), ('gvhmr', 'GVHMR body + world (faster)', 'Runs only GVHMR; no SAM hands or facial stage')], default='hybrid', update=custom_changed)
+    method: EnumProperty(name='Body method', items=[('sam_camera', 'SAM 3D Body on camera', 'SAM body, fingers and optional face placed on the tracked (Camera Track) or locked-off camera: one body shape for the shot, smooth depth, planted feet. No GVHMR stage'),
+                                                    ('hybrid', 'SAM + GVHMR world (fallback)', 'SAM body, optional hands/face, GVHMR hip position and root rotation; for moving cameras that are not tracked'),
+                                                    ('gvhmr', 'GVHMR body + world (fallback)', 'Runs only GVHMR; no SAM hands or facial stage; needs most of the body in frame')], default='sam_camera', update=custom_changed)
     face_capture: EnumProperty(name='Face capture', items=[('none', 'Off', 'Skip facial inference'), ('sam_native', 'SAM native face', 'MHR facial expressions from the existing SAM face stage'), ('realdenseface_flame', 'RealDenseFace + FLAME head', 'Additional face fitting and joined FLAME head on SAM body; slower')], default='none', update=custom_changed)
     hand_refinement: BoolProperty(name='Hand refinement', default=True, update=custom_changed)
     sam_smoothing: FloatProperty(name='SAM smoothing', default=1., min=0., max=1.)
@@ -238,13 +244,15 @@ class MocapSettings(PropertyGroup):
     fps_override: FloatProperty(name='FPS override (0 = plate)', default=0., min=0., max=240.)
     warm_models: BoolProperty(name='Keep models warm on worker', default=False, description='The worker keeps GVHMR/SAM loaded in RAM between jobs (GPU memory is still freed); speeds up repeated jobs')
     # Camera
-    camera_mode: EnumProperty(name='Camera', items=[('ESTIMATE', 'Estimate from footage', 'GVHMR infers the camera; focal assumed from the image diagonal'),
-                                                    ('FOCAL', 'Known lens', 'Focal length and filmback known; camera motion still inferred'),
-                                                    ('SCENE', 'Solved scene camera', 'Use a tracked camera in this scene (ViPE, 3DE, ...); the body is placed in its world')], default='ESTIMATE')
+    camera_mode: EnumProperty(name='Camera', items=[('SCENE', 'Tracked camera (Camera Track)', 'Use a tracked camera in this scene (Camera Track / ViPE, 3DE, ...); the body is placed in its world'),
+                                                    ('LOCKED', 'Locked-off camera', 'The camera does not move. Lens from the plate metadata, else the focal length typed below, else estimated from the image'),
+                                                    ('ESTIMATE', 'Moving, not tracked (GVHMR)', 'GVHMR infers the camera; focal assumed from the image diagonal. GVHMR methods only'),
+                                                    ('FOCAL', 'Moving, not tracked, known lens (GVHMR)', 'Focal length and filmback known; camera motion inferred by GVHMR. GVHMR methods only')], default='LOCKED')
     moving_camera: BoolProperty(name='Moving camera', default=True)
     focal_mm: FloatProperty(name='Focal length (mm)', default=35., min=.1)
     sensor_preset: EnumProperty(name='Filmback', items=[item[:3] for item in SENSOR_PRESETS], default='FULL_FRAME', update=sensor_preset_changed)
     sensor_mm: FloatProperty(name='Sensor width (mm)', default=36., min=.1)
+    locked_focal_mm: FloatProperty(name='Focal length (mm)', default=0., min=0., description='Locked-off lens when the plate has no lens metadata; 0 = estimate it from the image (GeoCalib)')
     scene_camera: PointerProperty(name='Scene camera', type=bpy.types.Object, poll=scene_camera_poll)
     scene_placement: EnumProperty(name='Body placement', items=[('auto', 'Auto', "GVHMR's world motion when it agrees with the solved camera, otherwise follow the plate"),
                                                                ('world', 'GVHMR world motion', 'Clean world trajectory and foot contacts; for pans, tilts and handheld cameras that travel little'),
@@ -449,16 +457,51 @@ def selected_actors(settings, sel):
     return chosen or ([settings.actor_index] if 0 <= settings.actor_index < len(detected['boxes']) else [detected['largest']])
 
 
+def locked_lens(settings):
+    """Locked-off lens as dict(ratio=focal/plate width, source, focal_mm, sensor_mm) or None (= estimate on the worker).
+
+    Order: the plate's lens metadata, else the focal length typed by the artist (with the chosen filmback).
+    """
+    info = plate(settings)
+    meta = info.get('lens') or {}
+    if meta.get('focal_px'):
+        return dict(ratio=meta['focal_px']/meta['plate_width'], source='plate metadata ('+meta['source']+')',
+                    focal_mm=meta['focal_mm'], sensor_mm=meta['sensor_width_mm'])
+    if meta.get('focal_mm') and settings.sensor_mm > 0:
+        return dict(ratio=meta['focal_mm']/settings.sensor_mm, source=f"plate metadata focal {meta['focal_mm']:g} mm on the chosen {settings.sensor_mm:g} mm filmback",
+                    focal_mm=meta['focal_mm'], sensor_mm=settings.sensor_mm)
+    if settings.locked_focal_mm > 0:
+        return dict(ratio=settings.locked_focal_mm/settings.sensor_mm, source=f'artist focal length {settings.locked_focal_mm:g} mm on {settings.sensor_mm:g} mm filmback',
+                    focal_mm=settings.locked_focal_mm, sensor_mm=settings.sensor_mm)
+    return None
+
+
+def method_camera_issue(settings):
+    """Why the chosen method cannot run with the chosen camera, or ''."""
+    if settings.method == 'sam_camera' and settings.camera_mode not in ('SCENE', 'LOCKED'):
+        return ('SAM 3D Body on camera needs a camera: track the plate with Camera Track and choose "Tracked camera", '
+                'or choose "Locked-off camera". For a moving camera that is not tracked, use a GVHMR method.')
+    return ''
+
+
 def submit_options(settings, sel, actor):
     options = dict(method=settings.method, start_frame=0 if sel['sequence'] else sel['start_index'], max_frames=0 if sel['sequence'] else sel['count'],
                    actor_index=actor, moving_camera=settings.moving_camera, fps_override=settings.fps_override,
                    focal_px=0., max_side=settings.max_side, sam_smoothing=settings.sam_smoothing,
-                   hand_refinement=settings.hand_refinement, face_capture=settings.face_capture if settings.method == 'hybrid' else 'none')
+                   hand_refinement=settings.hand_refinement, face_capture=settings.face_capture if settings.method in ('hybrid', 'sam_camera') else 'none')
     if not settings.trim_to_actor:
         options['trim_to_actor'] = False
     if settings.camera_mode == 'FOCAL':
         options['focal_px'] = settings.focal_mm/settings.sensor_mm*plate(settings)['width']
-    if settings.camera_mode == 'SCENE':
+        options['focal_width_ratio'] = settings.focal_mm/settings.sensor_mm
+    if settings.camera_mode == 'LOCKED':
+        options['moving_camera'] = False
+        if settings.method == 'sam_camera':
+            options['locked_off'] = True
+        lens = locked_lens(settings)
+        if lens:
+            options.update(focal_px=lens['ratio']*plate(settings)['width'], focal_width_ratio=lens['ratio'], lens_source=lens['source'])
+    if settings.camera_mode == 'SCENE' and settings.method != 'sam_camera':
         options.update(scene_placement=settings.scene_placement, plate_lock=settings.plate_lock, orientation_lock=settings.orientation_lock,
                        plate_lock_smoothing=settings.plate_lock_smoothing)
     if settings.warm_models:
@@ -530,6 +573,9 @@ def submit_all(context):
     if sel['sequence'] and abs(info.get('pixel_aspect', 1.)-1) > 1e-3:
         raise ValueError('Anamorphic plates are not supported yet; desqueeze the plate first')
     camera_json = None
+    issue = method_camera_issue(settings)
+    if issue:
+        raise ValueError(issue)
     if settings.camera_mode == 'SCENE':
         issues = camera_check(settings, sel)
         if issues:
@@ -1132,7 +1178,8 @@ def draw_job_status(layout, job, width):
     if job.state == 'QUEUED':
         box.label(text=job.detail or 'Queued on the worker', icon='SORTTIME')
     plan = loads(job.record).get('options', {})
-    keys = ['upload', 'prepare', 'gvhmr']+(['sam'] if plan.get('method') == 'hybrid' else [])+(['face'] if plan.get('face_capture') == 'realdenseface_flame' else [])+['export', 'download', 'import']
+    inference = {'hybrid': ['gvhmr', 'sam'], 'sam_camera': ['sam']}.get(plan.get('method'), ['gvhmr'])
+    keys = ['upload', 'prepare']+inference+(['face'] if plan.get('face_capture') == 'realdenseface_flame' else [])+['export', 'download', 'import']
     current = keys.index(run['stage']) if run['stage'] in keys else 0
     column = box.column(align=True)
     for index, key in enumerate(keys):
@@ -1289,6 +1336,34 @@ class MOCAP_PT_camera(SubPanel, Panel):
     def draw(self, context):
         layout, settings, width = self.layout, context.scene.mocap_comfy, wrap_width(context)
         layout.prop(settings, 'camera_mode', text='')
+        issue = method_camera_issue(settings)
+        if issue:
+            column = layout.column(align=True)
+            column.alert = True
+            for line in textwrap.wrap(issue, width):
+                column.label(text=line)
+        if settings.camera_mode == 'LOCKED':
+            meta = plate(settings).get('lens') or {}
+            if meta.get('focal_px'):
+                camera_name = f" · {meta['camera']}" if meta.get('camera') else ''
+                hint(layout, f"Lens from the plate: {meta['focal_mm']:g} mm on {meta['sensor_width_mm']:.2f} mm{camera_name}", width, 'CHECKMARK')
+                if meta.get('warning'):
+                    hint(layout, meta['warning'], width, 'ERROR')
+            else:
+                if meta.get('focal_mm'):
+                    hint(layout, f"Plate focal length {meta['focal_mm']:g} mm; choose the filmback", width, 'INFO')
+                else:
+                    column = layout.column(align=True)
+                    column.prop(settings, 'locked_focal_mm')
+                column = layout.column(align=True)
+                column.prop(settings, 'sensor_preset', text='')
+                column.prop(settings, 'sensor_mm')
+                if not meta.get('focal_mm') and settings.locked_focal_mm <= 0:
+                    hint(layout, 'No lens in the plate metadata: type the focal length, or leave 0 to estimate it from the image '
+                                 '(GeoCalib, also levels the camera tilt and roll)', width, 'INFO')
+            if any(c.get('vipe_camera') for c in bpy.data.collections):
+                hint(layout, 'This scene has a Camera Track camera: if the plate moves, choose "Tracked camera"', width, 'INFO')
+            return
         if settings.camera_mode in ('ESTIMATE', 'FOCAL'):
             layout.prop(settings, 'moving_camera')
         if settings.camera_mode == 'FOCAL':
@@ -1318,6 +1393,10 @@ class MOCAP_PT_camera(SubPanel, Panel):
             column.alert = True
             for line in textwrap.wrap(issue, width):
                 column.label(text=line)
+        if settings.method == 'sam_camera':
+            hint(layout, "SAM 3D Body is placed on this camera: one body shape for the shot, depth chosen for smooth motion and "
+                         "planted feet; the body stays on the plate.", width)
+            return
         layout.prop(settings, 'scene_placement')
         column = layout.column(align=True)
         column.active = settings.scene_placement != 'plate'
@@ -1339,7 +1418,7 @@ class MOCAP_PT_process(SubPanel, Panel):
         layout.prop(settings, 'preset')
         column = layout.column(align=True)
         column.prop(settings, 'method', text='')
-        if settings.method == 'hybrid':
+        if settings.method in ('hybrid', 'sam_camera'):
             column.prop(settings, 'hand_refinement')
             column.prop(settings, 'face_capture', text='Face')
             column.prop(settings, 'sam_smoothing')
@@ -1357,7 +1436,7 @@ class MOCAP_PT_import(SubPanel, Panel):
         layout, settings = self.layout, context.scene.mocap_comfy
         for prop in ('include_mesh', 'include_rig', 'auto_import'):
             layout.prop(settings, prop)
-        if settings.camera_mode != 'SCENE':
+        if settings.camera_mode not in ('SCENE', 'LOCKED') and settings.method != 'sam_camera':
             layout.prop(settings, 'camera_view')
         layout.operator('mocap_comfy.import_result', icon='FILE_FOLDER')
 
@@ -1385,7 +1464,14 @@ class MOCAP_PT_results(SubPanel, Panel):
             row.operator('mocap_comfy.review_camera', text='Scene camera', icon='CAMERA_DATA').view = 'SCENE'
         else:
             row.operator('mocap_comfy.review_camera', text='Video fit').view = 'VIDEO'
-        row.operator('mocap_comfy.review_camera', text='GVHMR camera').view = 'WORLD'
+        if collection.get('method') != 'sam_camera':
+            row.operator('mocap_comfy.review_camera', text='GVHMR camera').view = 'WORLD'
+        if collection.get('method') == 'sam_camera':
+            layout.operator('mocap_comfy.level_from_actor', icon='ORIENTATION_GLOBAL')
+            levelled = loads(collection.get('level_from_actor', ''))
+            if levelled:
+                hint(layout, f"Levelled ({levelled['method']}): tilt {levelled['tilt_corrected_degrees']:.1f}°, "
+                             f"feet within {levelled['ankle_height_residual_rms_m']*100:.1f} cm", width)
         layout.operator('mocap_comfy.pose_rig', icon='ARMATURE_DATA')
         layout.operator('mocap_comfy.export_nuke', text='Export to Nuke…', icon='EXPORT')
 
@@ -1445,7 +1531,7 @@ CLASSES = (MocapPreferences, MocapJob, MocapSettings, MOCAP_OT_check, MOCAP_OT_s
            MOCAP_OT_show_actors, MOCAP_OT_use_scene_camera, MOCAP_OT_resume, MOCAP_OT_cancel, MOCAP_OT_import_job, MOCAP_OT_remove_job,
            MOCAP_OT_import_file, MOCAP_OT_open_job_log, MOCAP_OT_review_camera, MOCAP_OT_pose_rig, MOCAP_OT_export_nuke,
            MOCAP_OT_live_log, MOCAP_OT_close_log, MOCAP_UL_jobs, MOCAP_PT_panel, MOCAP_PT_worker, MOCAP_PT_footage, MOCAP_PT_camera,
-           MOCAP_PT_process, MOCAP_PT_import, MOCAP_PT_results, MOCAP_PT_jobs, MOCAP_PT_logs)+FACE_CLASSES+VISUAL_CLASSES
+           MOCAP_PT_process, MOCAP_PT_import, MOCAP_PT_results, MOCAP_PT_jobs, MOCAP_PT_logs)+FACE_CLASSES+VISUAL_CLASSES+LEVEL_CLASSES
 
 
 def register():

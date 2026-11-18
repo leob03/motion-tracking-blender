@@ -2,7 +2,7 @@
 
 ## Install
 
-Build `mocap_comfy-0.6.3.zip` with `python scripts/build_packages.py` (output in `dist/`). Install it through **Edit → Preferences → Add-ons → Install from Disk**, enable **Mocap ComfyUI**, then restart Blender. Blender 4.4.0 on Linux is tested; Windows remains unvalidated.
+Build `mocap_comfy-0.7.0.zip` with `python scripts/build_packages.py` (output in `dist/`). Install it through **Edit → Preferences → Add-ons → Install from Disk**, enable **Mocap ComfyUI**, then restart Blender. Blender 4.4.0 on Linux is tested; Windows remains unvalidated.
 
 The worker URL, optional bearer token and download folder are **add-on preferences** (shared by all scenes; also shown in the **Worker** sub-panel). For a local worker use `http://127.0.0.1:8188`. A remote worker can use the team's approved HTTP(S) endpoint or an SSH tunnel:
 
@@ -19,10 +19,10 @@ The header shows the worker state (refresh button = **Check Connection**), the *
 1. **Worker**: URL, token, download folder, *Keep models warm on worker*.
 2. **Plate and actor**: a movie, or any frame of an EXR/DPX/TIFF/PNG/JPEG sequence. Size, frame count and fps are read from headers. **First/Last** are 1-based for movies and file frame numbers for sequences (↔ selects the whole plate); the line below shows the frame count and timeline range. Sequences ask for their colour space: the add-on tone-maps and downsizes the selection to a JPEG proxy before upload (ViPE's proxy format) and keeps the file frame numbers on the timeline. **Detect Actors** uploads the plate (reused by the job) and shows the first frame with numbered people; click a number to pick the actor. The job then selects that person by overlap. Without detection, actors are numbered 0, 1, 2 left to right; −1 picks the largest.
 3. **Camera**:
-   - *Estimate from footage*: as before; focal assumed from the image diagonal.
-   - *Known lens*: focal length (mm) and filmback; camera motion still inferred.
-   - *Solved scene camera*: pick a tracked camera in this scene (ViPE, 3DE, …). See below.
-4. **Processing**: preset (*Quick body (GVHMR)*, *Body + hands*, *Body + hands + face*) with the underlying method, hand refinement, face and smoothing settings; processing size and FPS override.
+   - *Tracked camera (Camera Track)*: pick a tracked camera in this scene (Camera Track / ViPE, 3DE, …). See below.
+   - *Locked-off camera* (default): the camera does not move. Lens from the plate metadata, else the focal length you type, else estimated from the image (GeoCalib). See [SAM_ON_CAMERA.md](SAM_ON_CAMERA.md).
+   - *Moving, not tracked (GVHMR)* and *Moving, not tracked, known lens (GVHMR)*: GVHMR methods only; GVHMR infers the camera.
+4. **Processing**: preset (*Quick body (GVHMR)*, *Body + hands*, *Body + hands + face*) with the underlying method (*SAM 3D Body on camera* by default; *SAM + GVHMR world* and *GVHMR* as fallbacks), hand refinement, face and smoothing settings; processing size and FPS override.
 5. **Import**: mesh/armature/auto-import options and **Import Saved Bundle…**.
 6. **Result** (when a result is active): summary (frames, camera, plate error, world-fit residual, worker timings), review cameras, **Edit Body / Finger Bones**, **Export to Nuke…**.
 7. **Face corrections**: unchanged; see [facial editing](FLAME_EDITING.md).

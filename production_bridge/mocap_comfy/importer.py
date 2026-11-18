@@ -273,7 +273,20 @@ def summary_lines(manifest, start, scene_camera):
     lines += [f"{manifest['rig']['type'] if manifest.get('rig') else manifest['method']} · {n} frames · timeline {start}–{start+n-1}",
              f"Face: {manifest.get('face_capture', 'none').replace('_', ' ')} · {manifest['rig']['bones'] if manifest.get('rig') else 0} bones"]
     info = manifest.get('scene_camera')
-    if info:
+    if info and info.get('placement') == 'sam-on-camera':
+        error = info.get('plate_error_px', {})
+        placement = info.get('sam_placement', {})
+        kind = 'locked-off · lens: ' + info.get('lens_source', 'unknown') if info.get('source') == 'locked' else 'tracked'
+        shown = error.get('in_frame', error)
+        lines.append(f"Camera: {scene_camera or info.get('name')} ({kind}) · plate error {shown.get('mean_px', 0):.1f} px mean, {shown.get('p95_px', 0):.1f} px p95"
+                     + (' (joints in frame)' if 'in_frame' in error else ''))
+        contacts = placement.get('contact_frames') or [0, 0]
+        lines.append(f"SAM 3D Body on camera · depth jitter {placement.get('jitter_cm_before', 0):.1f} → {placement.get('jitter_cm_after', 0):.1f} cm · "
+                     f"planted feet {contacts[0]}/{contacts[1]} frames" + (f" · body scale in scene ×{info.get('body_scale_in_scene', 1):.2f}" if abs(info.get('body_scale_in_scene', 1)-1) > .005 else ''))
+        if info.get('source') == 'locked' and info.get('geocalib'):
+            g = info['geocalib']
+            lines.append(f"Camera levelled from the image: tilt {g['tilt_up_degrees']:+.1f}°, roll {g['roll_degrees']:+.1f}° · floor: {info.get('floor', '')}")
+    elif info:
         error = info.get('plate_error_px', {})
         registration = info.get('registration', {})
         lines.append(f"Camera: {scene_camera or info.get('name')} (solved) · plate error {error.get('mean_px', 0):.1f} px mean, {error.get('p95_px', 0):.1f} px p95")
@@ -359,13 +372,18 @@ def import_bundle(path, start=1001, include_mesh=True, video='', scene=None, cam
         if root.parent is not None:
             root.matrix_parent_inverse.identity()
         root.scale = (1/known.get('world_scale', 1.),)*3
-        existing = bpy.data.objects.get(known.get('name', ''))
+        locked = known.get('source') == 'locked'
+        existing = None if locked else bpy.data.objects.get(known.get('name', ''))
         if existing is not None and existing.type == 'CAMERA':
             collection['scene_camera'] = existing.name
             cameras = [existing]
         else:
-            cameras = [make_camera(children['cameras'], 'Scene Camera (from bundle)', arrays['camera_to_world'], K, width, height, start, root)]
-            cameras[0]['mocap_camera_role'] = 'SCENE'
+            # A locked-off camera is built by the worker (lens, tilt, roll, height): always a new object for this result.
+            cameras = [make_camera(children['cameras'], 'Locked-off Camera' if locked else 'Scene Camera (from bundle)',
+                                   arrays['camera_to_world'], K, width, height, start, root)]
+            cameras[0]['mocap_camera_role'] = 'LOCKED' if locked else 'SCENE'
+            if locked:
+                cameras[0]['description'] = 'Locked-off camera: lens from ' + known.get('lens_source', 'unknown') + '.'
             collection['scene_camera'] = cameras[0].name
         if 'inferred_camera_to_world' in arrays:
             inferred = make_camera(children['cameras'], 'GVHMR World Camera', arrays['inferred_camera_to_world'], K, width, height, start, root)

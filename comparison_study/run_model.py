@@ -17,7 +17,7 @@ import time
 import types
 from pathlib import Path
 
-ASSETS = Path(__file__).resolve().parent
+ASSETS = Path(__file__).absolute().parent  # not resolve(): a dev study may symlink this file
 INSTALLED = Path('/home/innovation/dev-lbringer/ComfyUI_nightly')
 sys.path.insert(0, str(ASSETS.parent/'production_bridge'))
 JOINT_NAMES=['left_shoulder','right_shoulder','left_elbow','right_elbow','left_wrist','right_wrist',
@@ -36,6 +36,7 @@ def parse(argv):
     p.add_argument('--work-root',type=Path,help='Isolated inputs/results directory for a ComfyUI job')
     p.add_argument('--sam-smoothing',type=float,default=1.)
     p.add_argument('--no-hand-refinement',action='store_true')
+    p.add_argument('--place',action='store_true',help='SAM: lock body proportions and place in depth on inputs/CLIP/known_camera.npz')
     return p.parse_args(argv)
 
 
@@ -90,6 +91,78 @@ def sam_model():
         folder_paths.add_model_folder_path('detection',str(ASSETS/'models'))
         _cache['sam']=SAM3DBody_Loader.execute('sam_3d_body_dinov3_bf16.safetensors')[0]
     return _cache['sam']
+
+
+def place_on_camera(a, meta, model, variants, out, save_common, build_glb_skeletal):
+    """SAM on a known camera: one body shape per actor, then depth placement (production_bridge/sam_camera.py)."""
+    import numpy as np
+    from progress import report
+    import sam_camera
+    if a.multi:
+        raise ValueError('Placement on a known camera supports one actor per job')
+    known_path = (a.work_root.resolve() if a.work_root else ASSETS)/'inputs'/a.clip/'known_camera.npz'
+    if not known_path.exists():
+        raise ValueError('--place needs inputs/<clip>/known_camera.npz')
+    known = dict(np.load(known_path))
+    base = variants['face' if a.face else 'smooth']
+    if os.environ.get('MOCAP_DEBUG_PLACEMENT'):
+        with open(out/'placement_input.pkl', 'wb') as f:  # developer aid: re-run lock/refit/placement offline
+            pickle.dump(dict(base=base, meta=meta, known=known), f)
+    report('sam', 'Locking body proportions for the shot')
+    locked, lock_report = sam_camera.lock_identity(base, model.model.head_pose)
+    ids = sam_camera.STUDY_KEYPOINTS
+    T = np.stack([np.asarray(f[0]['pred_cam_t'], float) for f in base['frames']])
+    sam_joints = np.stack([np.asarray(f[0]['pred_keypoints_3d'], float)[ids] for f in base['frames']])+T[:, None]
+    K = np.asarray(meta['K'], float)
+    # Re-aim the locked body at SAM's 2D keypoints at the projection-preserving depth (constant bones, plate kept).
+    report('sam', 'Fitting the locked body to the plate (body, hands, feet)')
+    locked_joints = np.stack([np.asarray(f[0]['pred_keypoints_3d'], float)[ids] for f in locked['frames']])
+    preserve = sam_camera.body_size(locked_joints)/sam_camera.body_size(sam_joints)
+    locked, refit_report = sam_camera.refit_pose(locked, base, model.model.head_pose, K, preserve)
+    lock_report['pose_refit'] = refit_report
+    T0 = T*preserve[:, None]  # the refit depth: here the locked body sits where SAM's body was on the plate
+    rest = np.stack([np.asarray(f[0]['pred_keypoints_3d'], float) for f in locked['frames']])+T0[:, None]  # (F, 70, 3)
+    pix = sam_joints@K.T
+    ankles_2d = (pix[..., :2]/pix[..., 2:3])[:, list(sam_camera.ANKLES)]
+    report('sam', 'Placing the body on the camera (depth, planted feet)')
+    # The depth move is anchored at the centre of the keypoints inside the image: the visible part stays put on the
+    # plate and only scales slightly around itself (hips below the frame edge would otherwise swing the arms).
+    kp2d = rest@K.T
+    kp2d = kp2d[..., :2]/kp2d[..., 2:3]
+    margin = .02*max(meta['width'], meta['height'])
+    inside = (kp2d[..., 0] > margin) & (kp2d[..., 0] < meta['width']-margin) & (kp2d[..., 1] > margin) & (kp2d[..., 1] < meta['height']-margin)
+    weight = inside.astype(float)
+    weight[weight.sum(1) == 0] = 1.
+    anchor = (rest*weight[..., None]).sum(1)/weight.sum(1)[:, None]
+    anchor_2d = anchor@K.T
+    anchor_2d = anchor_2d[:, :2]/anchor_2d[:, 2:3]
+    # How far the visible body reaches on screen from the anchor bounds the depth change per frame (plate budget).
+    distance = np.linalg.norm(kp2d-anchor_2d[:, None], axis=-1)
+    extent = np.array([np.percentile(d[m] if m.any() else d, 90) for d, m in zip(distance, inside)])
+    rest12 = rest[:, ids]
+    r, s, contacts, place_report = sam_camera.solve_placement(
+        rest12-anchor[:, None], anchor, sam_camera.body_size(rest12), known['c2w'], float(meta['fps']), ankles_2d, meta['width'], meta['height'],
+        scale_free=bool(meta.get('moving_camera', True)), extent_px=extent)
+    q = r  # saved as depth_factor: 1 = SAM's own depth for the locked body
+    frames = []
+    for f, t0, k, c in zip(locked['frames'], T0, r, anchor):
+        p = dict(f[0])
+        p['pred_cam_t'] = (t0+(k-1)*c).astype(np.float32)
+        frames.append([p])
+    placed = dict(locked, frames=frames)
+    verts = np.stack([f[0]['pred_vertices']+f[0]['pred_cam_t'][None] for f in frames])
+    joints = np.stack([np.asarray(f[0]['pred_keypoints_3d'])[ids]+f[0]['pred_cam_t'][None] for f in frames])
+    save_common('placed', verts, joints, placed['faces'], coordinate_system='opencv_camera_meters (SAM metres; scene = scene_scale x camera space)',
+                world_recovery=False, depth_factor=q, scene_scale=s, contacts=contacts,
+                sam_joints_camera=sam_joints.astype(np.float32))
+    (out/'placed.glb').write_bytes(build_glb_skeletal(placed, model=model.model, fps=meta['fps'], camera_translation='absolute',
+                                                       include_face_morphs=True, bone_smooth_window=0))
+    projected = joints@K.T
+    error = np.linalg.norm(projected[..., :2]/projected[..., 2:3]-pix[..., :2]/pix[..., 2:3], axis=-1)
+    place_report.update(identity=lock_report, plate_error_px=dict(mean=float(error.mean()), p95=float(np.percentile(error, 95)), max=float(error.max())),
+                        source_variant='face' if a.face else 'smooth')
+    (out/'placement.json').write_text(json.dumps(place_report, indent=1))
+    print('[SAM placement]', json.dumps({k: place_report[k] for k in ('global_scale', 'jitter_cm_before', 'jitter_cm_after', 'contact_frames', 'plate_error_px')}), flush=True)
 
 
 def run(a):
@@ -188,7 +261,9 @@ def run(a):
                             world_recovery=False)
                 (out/f'{label}.glb').write_bytes(build_glb_skeletal(data,model=model.model,fps=meta['fps'],
                             camera_translation='absolute',include_face_morphs=True,bone_smooth_window=0))
-            details=dict(persons_per_frame=2 if a.multi else 1,hand_refinement=not a.no_hand_refinement,face_estimation=a.face,batch_size=4,precision="fp32",smoother=f'savgol 7, strength {a.sam_smoothing}, rotation threshold 30 deg/frame',
+            if a.place:
+                place_on_camera(a,meta,model,dict(variants),out,save_common,build_glb_skeletal)
+            details=dict(persons_per_frame=2 if a.multi else 1,hand_refinement=not a.no_hand_refinement,face_estimation=a.face,placed_on_camera=a.place,batch_size=4,precision="fp32",smoother=f'savgol 7, strength {a.sam_smoothing}, rotation threshold 30 deg/frame',
                          integration='cloned ComfyUI core',world_recovery=False)
         else:
             report('gvhmr', 'Loading GVHMR and solving body/world motion' if not warm_reused else 'Reusing warm GVHMR models; solving body/world motion')

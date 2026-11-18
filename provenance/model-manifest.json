@@ -236,7 +236,22 @@
       "aliases": [],
       "bytes": 1310,
       "sha256": "6fd6dd687800da946d0a0492383f973b92ec20f166a0b829775882868c35fcdd"
+    },
+    {
+      "id": "geocalib_pinhole",
+      "root": "study",
+      "path": "models/geocalib/pinhole.tar",
+      "features": [
+        "hybrid"
+      ],
+      "url": "https://github.com/cvg/GeoCalib/releases/download/v1.0/geocalib-pinhole.tar",
+      "source_kind": "download",
+      "aliases": [],
+      "bytes": 116074121,
+      "sha256": "86d6aeacd8bbd974c59ce39f61854e00d36911c732ad89be471476fd708722ac",
+      "upstream_sha256_matches": null,
+      "note": "Apache-2.0 (GeoCalib). Only used by SAM 3D Body on camera for locked-off plates without lens metadata or a typed focal length."
     }
   ],
-  "total_unique_bytes": 9379144990
+  "total_unique_bytes": 9495219111
 }
