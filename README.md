@@ -2,10 +2,13 @@
 
 Select a local video in Blender, process one actor on a ComfyUI GPU worker, and import an editable body/finger armature, the fitted mesh, cameras, and the original movie background. **Artist machines need Blender and network access; no CUDA, PyTorch or model files.**
 
-Version **0.6.0** reworks the workflow: image-sequence (EXR/DPX/TIFF/PNG) plates with OCIO-tone-mapped upload proxies, one-time uploads, an actor preview (**Detect Actors**), presets, a job list for queuing several actors, and **Export to Nuke**. A **solved scene camera** (for example from the ViPE Remote Tracking add-on) can drive the job: GVHMR uses its rotations and the body is placed in that camera's world with a depth-preserving plate lock. On the worker, a near-lossless intermediate video, GPU actor detection, a focal-length fix for camera odometry and optional warm models shorten jobs. The 0.5.0 face controls are unchanged. The original reviewed handoff remains at tag `v0.3.1`.
+Version **0.7.0** adds **SAM 3D Body on camera**, the new default body method: SAM's body and fingers placed on a tracked (Camera Track) or locked-off camera with one body shape per shot, depth chosen for smooth motion and planted feet, and an editable MHR rig with constant bone lengths. No GVHMR stage; GVHMR methods remain as fallbacks for moving cameras that are not tracked. Locked-off shots take their lens from the plate metadata (ARRI and similar EXR headers), a typed focal length, or a GeoCalib estimate that also levels the camera. **Level from Actor** makes the ground under the actor horizontal in a Camera Track scene. See [docs/SAM_ON_CAMERA.md](docs/SAM_ON_CAMERA.md).
+
+Version **0.6.0** reworked the workflow: image-sequence (EXR/DPX/TIFF/PNG) plates with OCIO-tone-mapped upload proxies, one-time uploads, an actor preview (**Detect Actors**), presets, a job list for queuing several actors, and **Export to Nuke**. A **solved scene camera** (for example from the ViPE Remote Tracking add-on) can drive the job: GVHMR uses its rotations and the body is placed in that camera's world with a depth-preserving plate lock. On the worker, a near-lossless intermediate video, GPU actor detection, a focal-length fix for camera odometry and optional warm models shorten jobs. The 0.5.0 face controls are unchanged. The original reviewed handoff remains at tag `v0.3.1`.
 
 | Mode | Body and world placement | Hands / face |
 | --- | --- | --- |
+| SAM 3D Body on camera (default) | SAM/MHR articulation and fingers on a tracked or locked-off camera; depth placement | One body shape per shot; face off, SAM native, or RealDenseFace + joined FLAME head |
 | GVHMR | SMPL-X body, inferred world position and orientation | Manually editable finger bones; no predicted fingers or facial stage |
 | SAM + GVHMR | SAM/MHR articulation with GVHMR hip XYZ and root orientation | Optional SAM hand refinement; face off, SAM native, or RealDenseFace + joined FLAME head |
 
@@ -28,7 +31,7 @@ Build the current artist add-on and worker packages using ordinary Python 3:
 python scripts/build_packages.py
 ```
 
-Install `dist/mocap_comfy-0.6.0.zip` in Blender. The separate `mocap_worker_snapshot-0.6.0.zip` preserves the worker/helper directory layout; it is **not** a standalone custom-node ZIP. Follow the worker setup guide to install its custom-node symlink.
+Install `dist/mocap_comfy-0.7.0.zip` in Blender. The separate `mocap_worker_snapshot-0.7.0.zip` preserves the worker/helper directory layout; it is **not** a standalone custom-node ZIP. Follow the worker setup guide to install its custom-node symlink.
 
 ## What this repository preserves
 

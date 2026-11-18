@@ -22,6 +22,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--study', type=Path, required=True)
     parser.add_argument('--job-root', type=Path, required=True)
+    parser.add_argument('--sam-variant', default='smooth', choices=['smooth', 'placed'],
+                        help='SAM body the FLAME head is joined to; placed = SAM 3D Body on camera (locked proportions)')
     args = parser.parse_args()
     study, root = args.study.resolve(), args.job_root.resolve()
     lock = (study/'inference.lock').open('w')
@@ -104,7 +106,7 @@ def main():
     gc.collect()
     torch.cuda.empty_cache()
 
-    with np.load(base/'sam/smooth.npz', allow_pickle=False) as data:
+    with np.load(base/f'sam/{args.sam_variant}.npz', allow_pickle=False) as data:
         body = data['vertices_camera']
         body_faces = data['faces']
     report('face', 'Attaching FLAME head and joining the neck')

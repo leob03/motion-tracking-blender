@@ -10,7 +10,7 @@ All listed files belong on the GPU worker. **The artist machine needs none of th
 | Hybrid body/hands, including optional SAM native face | 10 | 7.839 |
 | Hybrid + RealDenseFace/FLAME | 17 | 8.735 |
 
-The complete set is approximately **9.38 GB / 8.74 GiB**. Sizes exclude source repositories, Python/CUDA environments, compiler caches and job scratch. Some small entries already ship in pinned source repositories; warehouse them with their source or as DVC assets, but preserve their expected locations.
+The complete set is approximately **9.50 GB / 8.84 GiB** (0.7.0 adds the 116 MB GeoCalib weights). Sizes exclude source repositories, Python/CUDA environments, compiler caches and job scratch. Some small entries already ship in pinned source repositories; warehouse them with their source or as DVC assets, but preserve their expected locations.
 
 ## Download links
 
@@ -33,6 +33,7 @@ The complete set is approximately **9.38 GB / 8.74 GiB**. Sizes exclude source r
 | [head_hand_mask.npz](https://raw.githubusercontent.com/facebookresearch/MHR/d96fafa33bbf018647c70c3525e91f53e79d2a14/tools/mhr_smpl_conversion/assets/head_hand_mask.npz) | 0.212 | RealDenseFace/FLAME | source asset |
 | [flame_landmark_embedding](https://raw.githubusercontent.com/georgeretsi/smirk/c7de404c4389f073906a6db1adabf62efcea3f35/assets/landmark_embedding.npy) | 0.030 | RealDenseFace/FLAME | source asset |
 | [smpl_mean_params](https://raw.githubusercontent.com/PozzettiAndrea/ComfyUI-MotionCapture/35c8dbc4de14448d4626a0f99e32c869371fea12/nodes/hmr2/smpl_mean_params.npz) | 0.001 | All modes | source asset |
+| [geocalib_pinhole](https://github.com/cvg/GeoCalib/releases/download/v1.0/geocalib-pinhole.tar) | 110.697 | SAM 3D Body on camera, locked-off without lens metadata | download (Apache-2.0) |
 
 The three GVHMR files are the **converted safetensors** consumed by the reviewed Comfy port; upstream GVHMR `.ckpt` downloads are not interchangeable inputs to this wrapper. The manifest pins the Hugging Face conversion revision and verifies its hashes against the local files. The SAM conversion is similarly revision/hash pinned.
 
@@ -68,6 +69,7 @@ study/vendor/MHR/tools/mhr_smpl_conversion/assets/mhr2smplx_mapping.npz
 study/vendor/MHR/tools/mhr_smpl_conversion/assets/head_hand_mask.npz
 study/vendor/smirk/assets/landmark_embedding.npy
 gvhmr_node/nodes/hmr2/smpl_mean_params.npz
+study/models/geocalib/pinhole.tar
 ```
 
 For example, the face model is read from `<study>/models/face/flame_downloads/FLAME2023/flame2023.pkl`; the adapter supplies that path to the fitter. The conventional upstream `weights/flame/flame2023.pkl` location is not a second required copy for this adapter. The RealDenseFace network and support assets retain their vendor-relative `weights/` locations because the face subprocess changes working directory to that checkout.

@@ -131,6 +131,49 @@ def load_known_camera(path, frames, source_w, source_h, w, h, offset=0):
     return c2w, K, dict(info, scene_up=up.tolist())
 
 
+def focal_pixels(options, w, source_w):
+    """Focal length at processing width. focal_width_ratio (focal / plate width) survives proxies of image sequences;
+    focal_px (plate pixels) from older add-ons assumes the uploaded video has the plate's width."""
+    if options.get('focal_width_ratio'):
+        return options['focal_width_ratio']*w
+    return options['focal_px']*w/source_w
+
+
+def locked_off_camera(video, options, study, frames, w, h, source_w):
+    """Static camera (Y-up world, at the origin) for a locked-off plate.
+
+    Lens, in order: the plate's lens metadata or the artist's focal length (options['focal_px'], original-width
+    pixels; options['lens_source'] says which), else GeoCalib on the shot. GeoCalib's gravity sets tilt and roll
+    so the scene comes in level; without it the camera is assumed level.
+    """
+    import lens_estimate
+    estimate = None
+    try:
+        report('prepare', 'Estimating the lens and camera tilt (GeoCalib)')
+        estimate = lens_estimate.estimate(video, study)
+    except Exception as error:  # the lens may still be known; only gravity is then missing
+        print('[Mocap] GeoCalib estimate failed:', error, flush=True)
+    if options.get('focal_width_ratio') or options.get('focal_px'):
+        focal = focal_pixels(options, w, source_w)
+        source = options.get('lens_source') or 'artist focal length'
+    elif estimate is not None:
+        focal = estimate['focal_px']
+        source = f"estimated from the image (GeoCalib, {focal*source_w/w:.0f} px at plate width)"
+    else:
+        focal = float(np.hypot(w, h))
+        source = 'assumed image diagonal focal; not calibrated'
+    up = estimate['up_camera'] if estimate is not None else [0., -1., 0.]
+    c2w = np.tile(np.eye(4), (frames, 1, 1))
+    c2w[:, :3, :3] = lens_estimate.level_camera(up)
+    K = np.tile(np.array([[focal, 0, w/2], [0, focal, h/2], [0, 0, 1.]]), (frames, 1, 1))
+    info = dict(name='Locked-off camera', parent='', world_scale=1., timeline_start=None, source='locked', distortion=False,
+                scene_up=[0., 1., 0.], lens_source=source, focal_px_plate=focal*source_w/w,
+                geocalib=estimate if estimate is None else {k: estimate[k] for k in ('focal_px', 'focal_sigma_px', 'tilt_up_degrees', 'roll_degrees', 'frames')})
+    print(f"[Mocap] Locked-off camera: focal {focal*source_w/w:.0f} px at plate width ({source})"
+          + (f"; tilt {estimate['tilt_up_degrees']:+.1f} deg, roll {estimate['roll_degrees']:+.1f} deg" if estimate else ''), flush=True)
+    return c2w, K, info
+
+
 PREPARED_VERSION = 1
 PREPARED_KEEP = 12
 
@@ -286,13 +329,18 @@ def prepare(root, source, options, study, camera_file=None, cache_dir=None):
         np.savez(out / 'known_camera.npz', c2w=c2w, K=K_frames)
         K = np.median(K_frames, axis=0)
         intrinsics_source = f"scene camera '{known_info['name']}'"
+    elif options.get('locked_off'):
+        c2w, K_frames, known_info = locked_off_camera(out/'input.mp4', options, study, len(boxes), w, h, source_w)
+        np.savez(out / 'known_camera.npz', c2w=c2w, K=K_frames)
+        K = K_frames[0]
+        intrinsics_source = known_info['lens_source']
     else:
-        focal = options['focal_px'] * w / source_w if options['focal_px'] else float(np.hypot(w, h))
+        focal = focal_pixels(options, w, source_w) if (options.get('focal_width_ratio') or options['focal_px']) else float(np.hypot(w, h))
         K = np.array([[focal, 0, w/2], [0, focal, h/2], [0, 0, 1]])
         intrinsics_source = 'user focal in original-width pixels' if options['focal_px'] else 'assumed image diagonal focal; not calibrated'
     meta = dict(name='shot', source=info['name'], start_frame=options['start_frame']+lo, frames=len(boxes), fps=fps,
                 width=w, height=h, original_width=source_w, original_height=source_h,
-                moving_camera=options['moving_camera'], boxes_xyxy=boxes.tolist(), K=K.tolist(),
+                moving_camera=options['moving_camera'] and not options.get('locked_off'), boxes_xyxy=boxes.tolist(), K=K.tolist(),
                 track_id=f'person_{index+1:03}', actor_index=index, intrinsics_source=intrinsics_source,
                 tracking='Seeds on the pick frame sorted left to right; Hungarian centre/size association forwards and backwards; gaps interpolated',
                 seed_frame=seed, inferred_box_frames=np.flatnonzero(~observed[:, index]).tolist(), known_camera=known_info,
@@ -451,6 +499,8 @@ def export_bundle(root, meta, options, destination, timings=None, started=None, 
         if study is None:
             raise ValueError('The FLAME editing export requires the study model path')
         report('export', 'Building editable FLAME expressions, jaw and eyes')
+        if 'actor_camera_to_world' not in arrays:  # scene-camera hybrid: same SAM camera -> world transform as the body
+            arrays['actor_camera_to_world'] = fitcam
         face_editing = add_flame_controls(arrays, rig, read_npz(base/'face/parameters.npz'), study)
         rig_error = face_editing['surface_reconstruction_error_m']
     else:
@@ -480,6 +530,124 @@ def export_bundle(root, meta, options, destination, timings=None, started=None, 
                     tracking=meta['tracking'], inferred_box_frames=meta['inferred_box_frames'], trimmed=meta.get('trimmed'),
                     validation=dict(gvhmr_camera_world_max_m=native_error),
                     inference={method: json.loads((base/method/'run.json').read_text()) for method in (['gvhmr', 'sam'] if options['method']=='hybrid' else ['gvhmr'])})
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(destination, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=1) as bundle:
+        bundle.write(arrays_path, 'animation.npz')
+        bundle.write(root/'actor_preview.jpg', 'actor_preview.jpg')
+        bundle.write(root/'inputs/shot/clip.json', 'tracking.json')
+        if (base/'face/parameters.npz').exists():
+            bundle.write(base/'face/parameters.npz', 'face_parameters.npz')
+        elif options.get('face_capture') == 'sam_native':
+            with (base/'sam/expressions.npy').open('rb') as f:
+                expression = np.load(f, allow_pickle=False)
+            np.savez_compressed(root/'face_parameters.npz', mhr_expression=expression)
+            bundle.write(root/'face_parameters.npz', 'face_parameters.npz')
+        timings['export_seconds'] = time.perf_counter()-export_start
+        if started is not None:
+            timings['worker_total_seconds'] = time.perf_counter()-started
+        manifest['timings'] = timings
+        bundle.writestr('manifest.json', json.dumps(manifest, indent=2))
+    status(root, 'Complete')
+
+
+def export_sam_camera(root, meta, options, destination, timings=None, started=None, study=None):
+    """Bundle for SAM 3D Body on a known camera (run_model.py --place): no GVHMR stage.
+
+    The placed SAM body is camera-space (SAM metres) with locked proportions; world = camera_to_world applied to
+    scene_scale x camera space. The rig is the placed SAM skeleton under the same transform (constant root scale).
+    """
+    status(root, 'Building portable Blender bundle')
+    export_start = time.perf_counter()
+    timings = dict(timings or {})
+    base = root/'results'/'shot'
+    placed = read_npz(base/'sam/placed.npz')
+    placement = json.loads((base/'sam/placement.json').read_text())
+    stored = read_npz(root/'inputs/shot/known_camera.npz')
+    c2w, K = stored['c2w'].copy(), stored['K']
+    info = dict(meta['known_camera'])
+    locked = info.get('source') == 'locked'
+    count = meta['frames']
+    scale = float(placed['scene_scale'])
+    contacts = placed['contacts'].astype(bool)
+
+    def world_from_camera():
+        W = c2w.copy()
+        W[:, :3, :3] = W[:, :3, :3]*scale
+        return W
+
+    def to_world(points):
+        W = world_from_camera()
+        return (np.einsum('fij,fvj->fvi', W[:, :3, :3], points)+W[:, None, :3, 3]).astype(np.float32)
+
+    if locked:
+        # Static camera: put the floor at Y = 0 under the planted feet (camera height follows); level from GeoCalib.
+        soles = to_world(placed['vertices_camera'])[:, :, 1].min(1)
+        planted = contacts.any(1)
+        if planted.sum() >= 3:
+            floor = float(np.median(soles[planted]))
+            c2w[:, 1, 3] -= floor
+            info.update(floor='planted feet', camera_height_m=float(-floor))
+        else:
+            info.update(floor='not visible; camera at the origin')
+    arrays = dict(camera_to_world=c2w, K=K, source_frames=np.arange(meta['start_frame'], meta['start_frame']+count),
+                  joints_world=to_world(placed['joints_camera']), vertices_world=to_world(placed['vertices_camera']),
+                  faces=placed['faces'], foot_contacts=contacts, depth_factor=placed['depth_factor'].astype(np.float32))
+    rig = read_sam_rig(base/'sam/placed.glb', count, world_from_camera())
+    if options.get('face_capture') == 'realdenseface_flame':
+        composite = read_npz(base/'face/composite.npz')
+        arrays['vertices_world'] = to_world(composite['vertices_camera'])
+        arrays['faces'] = composite['faces']
+        attach_flame_weights(rig, placed['vertices_camera'][0], composite['vertices_camera'][0])
+    jc = np.einsum('fji,fvj->fvi', c2w[:, :3, :3], arrays['joints_world']-c2w[:, None, :3, 3])
+    p = np.einsum('fij,fvj->fvi', K, jc)
+    arrays['joints_projected_pixels'] = p[..., :2]/p[..., 2:3]
+    plate = scene_camera.plate_error(K, c2w, arrays['joints_world'], placed['sam_joints_camera'])
+    # The same, on joints inside the frame only (on close-ups SAM guesses the off-screen ones; they do not matter).
+    ref = scene_camera.project(K, placed['sam_joints_camera'].astype(float))
+    seen = (ref[..., 0] >= 0) & (ref[..., 0] < meta['width']) & (ref[..., 1] >= 0) & (ref[..., 1] < meta['height'])
+    if seen.any():
+        error = np.linalg.norm(scene_camera.project(K, scene_camera.to_camera(c2w, arrays['joints_world']))-ref, axis=-1)[seen]
+        plate['in_frame'] = dict(mean_px=float(error.mean()), p95_px=float(np.percentile(error, 95)), joints_share=float(seen.mean()))
+    face_editing = None
+    if options.get('face_capture') == 'realdenseface_flame':
+        from flame_export import add_flame_controls
+        report('export', 'Building editable FLAME expressions, jaw and eyes')
+        arrays['actor_camera_to_world'] = world_from_camera()  # SAM camera space -> scene, used to place the FLAME head
+        face_editing = add_flame_controls(arrays, rig, read_npz(base/'face/parameters.npz'), study)
+        rig_error = face_editing['surface_reconstruction_error_m']
+    else:
+        rig_error = preserve_fitted_surface(rig, arrays['vertices_world'],
+                    lambda done, total: report('export', 'Preserving fitted surface for editable bones', done, total, frames=count))
+    arrays.update(rig)
+    arrays_path = root/'animation.npz'
+    np.savez_compressed(arrays_path, **arrays)
+    info.update(placement='sam-on-camera', plate_error_px=plate, sam_placement={k: v for k, v in placement.items() if k != 'settings'},
+                body_scale_in_scene=scale)
+    if locked:
+        camera_note = ('Locked-off camera built by the worker: lens from '+info['lens_source']+'; tilt and roll from GeoCalib. '
+                       'SAM 3D Body placed in depth on it (one body shape for the shot; smooth depth; planted feet).')
+    else:
+        camera_note = (f"Scene camera '{info.get('name')}' supplied by the artist. SAM 3D Body placed on it: one body shape for the shot, "
+                       'depth along each viewing ray chosen for smooth motion and planted feet; the plate position is SAM\'s.')
+    manifest = dict(schema='mocap-blender-bundle', version=2 if face_editing else 1, method='sam_camera',
+                    frames=count, fps=meta['fps'], width=meta['width'], height=meta['height'],
+                    original_width=meta['original_width'], original_height=meta['original_height'],
+                    source_start_frame=meta['start_frame'], track_id=meta['track_id'],
+                    coordinates='right-handed Y-up world; meters; camera extrinsics map OpenCV camera to world',
+                    joint_names=placed['joint_names'].tolist(), animation='animation.npz', source=meta['source'],
+                    plate=meta.get('plate'), intrinsics_source=meta['intrinsics_source'], options=options,
+                    camera_mode='locked' if locked else 'scene', scene_camera=info, camera_note=camera_note,
+                    body_note=('Native MHR armature (body and fingers) with one body shape for the shot, skin weights and retained surface '
+                               'residuals.' + (' FLAME results include expression keys and jaw/eye bones.' if face_editing else '')),
+                    face_editing=face_editing,
+                    rig=dict(type='MHR', bones=len(rig['rig_names']), surface_reconstruction_error_m=rig_error,
+                             body_scale_in_scene=scale,
+                             note='Learned surface/face correctives are retained at captured frames, not recomputed for edited poses.'),
+                    face_capture=options.get('face_capture', 'none'),
+                    face_details=json.loads((base/'face/metrics.json').read_text()) if (base/'face/metrics.json').exists() else None,
+                    tracking=meta['tracking'], inferred_box_frames=meta['inferred_box_frames'], trimmed=meta.get('trimmed'),
+                    validation=dict(plate_error_px=plate),
+                    inference={'sam': json.loads((base/'sam/run.json').read_text())})
     destination.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(destination, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=1) as bundle:
         bundle.write(arrays_path, 'animation.npz')
@@ -600,13 +768,16 @@ def main():
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     options = json.loads(args.options.read_text())
     options.setdefault('face_capture', 'none')
+    if options['method'] == 'sam_camera' and not (args.camera or options.get('locked_off')):
+        raise ValueError('SAM 3D Body on camera needs a camera: a tracked scene camera (Camera Track) or the locked-off option. '
+                         'For a moving camera that is not tracked, track it first or use the GVHMR method.')
     started = time.perf_counter()
     timings = {}
     # Inference children inherit the server's original GPU selection.
     inference_env = os.environ.copy()
     meta = prepare(args.job_root, args.video, options, args.study, args.camera, args.prepared_cache)
     timings['prepare_seconds'] = time.perf_counter()-started
-    methods = ['gvhmr', 'sam'] if options['method'] == 'hybrid' else ['gvhmr']
+    methods = {'hybrid': ['gvhmr', 'sam'], 'sam_camera': ['sam']}.get(options['method'], ['gvhmr'])
     for method in methods:
         stage_start = time.perf_counter()
         status(args.job_root, 'Running '+method.upper()+' inference')
@@ -615,6 +786,8 @@ def main():
             argv.append('--no-hand-refinement')
         if method == 'sam' and options['face_capture'] == 'sam_native':
             argv.append('--face')
+        if method == 'sam' and options['method'] == 'sam_camera':
+            argv.append('--place')
         if options.get('warm_models'):
             WarmModel(method, args.study, inference_env).run(argv, args.job_root)
         else:
@@ -626,9 +799,11 @@ def main():
         # RealDenseFace's compiled fitter uses CUDA graph pool inspection, which
         # PyTorch 2.9 does not support with ComfyUI's cudaMallocAsync allocator.
         face_env = dict(inference_env, PYTORCH_ALLOC_CONF='backend:native', PYTORCH_CUDA_ALLOC_CONF='backend:native')
-        subprocess.run([sys.executable, '-u', str(Path(__file__).with_name('face_worker.py')), '--study', str(args.study), '--job-root', str(args.job_root)], check=True, env=face_env)
+        subprocess.run([sys.executable, '-u', str(Path(__file__).with_name('face_worker.py')), '--study', str(args.study), '--job-root', str(args.job_root),
+                        '--sam-variant', 'placed' if options['method'] == 'sam_camera' else 'smooth'], check=True, env=face_env)
         timings['face_seconds'] = time.perf_counter()-stage_start
-    export_bundle(args.job_root, meta, options, args.output, timings, started, study=args.study)
+    export = export_sam_camera if options['method'] == 'sam_camera' else export_bundle
+    export(args.job_root, meta, options, args.output, timings, started, study=args.study)
     keep = os.environ.get('MOCAP_DEBUG_KEEP')
     if keep:
         # Developer aid: keep inputs and intermediate results to re-run export_bundle offline.

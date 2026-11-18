@@ -13,7 +13,7 @@ version = '.'.join(map(str, info['version']))
 out = ROOT/'dist'
 out.mkdir(exist_ok=True)
 artist = ['__init__.py', 'client.py', 'importer.py', 'rig.py', 'keys.py', 'log_view.py', 'face.py', 'face_controls.py',
-          'plate_proxy.py', 'scene_camera.py', 'nuke_export.py']
+          'plate_proxy.py', 'scene_camera.py', 'nuke_export.py', 'plate_lens.py', 'level.py']
 snapshot = json.loads((ROOT/'provenance/source-snapshot.json').read_text())
 worker = [row['path'] for row in snapshot['files'] if '/tests/' not in row['path'] and '/mocap_comfy/' not in row['path'] and not row['path'].endswith('package_addon.py')]
 

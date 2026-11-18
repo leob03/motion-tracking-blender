@@ -50,7 +50,10 @@ t0 = time.time()
 collection = mc.import_bundle(bundle, start, True, video, scene, plate=record)
 report['import_seconds'] = time.time()-t0
 manifest, arrays = mc.importer.read_bundle(bundle)
-report['manifest_scene_camera'] = {k: manifest['scene_camera'][k] for k in ('registration', 'gravity_tilt_degrees', 'plate_error_before_lock_px', 'plate_error_px', 'plate_lock')}
+# GVHMR/hybrid results report their world registration; SAM 3D Body on camera reports its depth placement.
+keys = ('placement', 'plate_error_px', 'sam_placement', 'body_scale_in_scene') if manifest['method'] == 'sam_camera' else \
+    ('registration', 'gravity_tilt_degrees', 'plate_error_before_lock_px', 'plate_error_px', 'plate_lock')
+report['manifest_scene_camera'] = {k: manifest['scene_camera'][k] for k in keys}
 assert scene.camera == cam, 'The ViPE camera must stay the active camera'
 assert collection.get('scene_camera') == cam.name
 root = next(o for o in collection.all_objects if o.get('mocap_role') == 'SCENE_ROOT')
