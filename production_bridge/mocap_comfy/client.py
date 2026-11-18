@@ -60,6 +60,8 @@ class ComfyClient:
             raise RuntimeError('This server does not have the MocapProcessVideo custom node')
         node = info['MocapProcessVideo']['input']
         self.accepted = set(node.get('required', {})) | set(node.get('optional', {}))
+        method = node.get('required', {}).get('method') or [[]]
+        self.methods = set(method[0]) if isinstance(method[0], list) else set()
         return info
 
     def features(self):
@@ -117,6 +119,10 @@ class ComfyClient:
     def submit(self, uploaded_video, options):
         self.progress_id = uuid.uuid4().hex
         self.log_offset = 0
+        methods = getattr(self, 'methods', None)
+        if methods and options.get('method') not in methods:
+            raise RuntimeError(f"The worker node does not offer the body method '{options.get('method')}' (it has: "
+                               + ', '.join(sorted(methods))+'). Update and restart the worker, or pick another method.')
         accepted = getattr(self, 'accepted', None)
         if accepted:
             unsupported = [key for key, value in options.items() if key not in accepted and value not in ('', None, False)]

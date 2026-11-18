@@ -73,6 +73,9 @@ blender -b --factory-startup --python-exit-code 1 --python production_bridge/tes
 python production_bridge/tests/scene_camera_known_answer.py production_bridge result.mocap.zip
 blender -b --factory-startup --python-exit-code 1 --python production_bridge/tests/blender_vipe_handoff.py -- \
   vipe_result.zip plate.mp4 OUT http://127.0.0.1:8188 [existing.mocap.zip]
+# Through the ComfyUI node, as Blender submits (running worker):
+python production_bridge/tests/run_api_job.py --video plate.mp4 --frames 60 --method sam_camera --locked-off --out OUT
+python production_bridge/tests/run_api_job.py --video plate.mp4 --frames N --method sam_camera --camera scene_camera.json --out OUT
 ```
 
 The hand-off test accepts SAM-on-camera bundles (placement report instead of GVHMR registration). On barnab: Blender vs

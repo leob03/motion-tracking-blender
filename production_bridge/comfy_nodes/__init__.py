@@ -17,6 +17,8 @@ from .progress_api import atomic_json, estimate_seconds, record_timing
 BRIDGE = Path(__file__).resolve().parents[1]
 STUDY = Path(os.environ.get('MOCAP_STUDY_ROOT', str(BRIDGE.parent/'comparison_study'))).resolve()
 PYTHON = os.environ.get('MOCAP_PYTHON', str(STUDY/'.venv/bin/python'))
+METHODS = ('sam_camera', 'hybrid', 'gvhmr')
+INFERENCE = {'sam_camera': ['sam'], 'hybrid': ['gvhmr', 'sam'], 'gvhmr': ['gvhmr']}
 
 
 class MocapProcessVideo:
@@ -24,7 +26,7 @@ class MocapProcessVideo:
     def INPUT_TYPES(cls):
         return {'required': {
             'video': ('STRING', {'default': ''}),
-            'method': (['hybrid', 'gvhmr'],),
+            'method': (list(METHODS), {'default': 'sam_camera', 'tooltip': 'sam_camera needs a scene camera or locked_off'}),
             'start_frame': ('INT', {'default': 0, 'min': 0}),
             'max_frames': ('INT', {'default': 120, 'min': 0, 'max': 100000}),
             'actor_index': ('INT', {'default': -1, 'min': -1, 'max': 1000}),
@@ -46,6 +48,10 @@ class MocapProcessVideo:
             'plate_lock_smoothing': ('FLOAT', {'default': 3., 'min': 0., 'max': 12.}),
             'orientation_lock': ('FLOAT', {'default': .5, 'min': 0., 'max': 1.}),
             'warm_models': ('BOOLEAN', {'default': False, 'tooltip': 'Keep GVHMR/SAM loaded in host RAM between jobs'}),
+            'locked_off': ('BOOLEAN', {'default': False, 'tooltip': 'sam_camera: static camera built by the worker (lens below, else estimated)'}),
+            'focal_width_ratio': ('FLOAT', {'default': 0., 'min': 0., 'max': 100., 'step': .0001,
+                                            'tooltip': 'Focal length / plate width (survives proxies); 0 = use focal_px or estimate'}),
+            'lens_source': ('STRING', {'default': '', 'tooltip': 'Where the lens came from (plate metadata, artist), for the report'}),
         }}
 
     RETURN_TYPES = ()
@@ -60,12 +66,12 @@ class MocapProcessVideo:
     def process(self, video, **options):
         progress_id = options.pop('progress_id', '')
         options.setdefault('face_capture', 'none')
-        if options['method'] not in ('gvhmr', 'hybrid'):
+        if options['method'] not in METHODS:
             raise ValueError('Unknown mocap method')
         if options['face_capture'] not in ('none', 'sam_native', 'realdenseface_flame'):
             raise ValueError('Unknown facial capture method')
-        if options['method'] != 'hybrid' and options['face_capture'] != 'none':
-            raise ValueError('Facial capture currently requires the hybrid SAM body')
+        if options['method'] == 'gvhmr' and options['face_capture'] != 'none':
+            raise ValueError('Facial capture needs a SAM body (sam_camera or hybrid)')
         input_root = Path(folder_paths.get_input_directory()).resolve()
         source = (input_root/video).resolve()
         if not source.is_relative_to(input_root) or not source.is_file():
@@ -74,6 +80,8 @@ class MocapProcessVideo:
         camera = (input_root/camera_name).resolve() if camera_name else None
         if camera is not None and (not camera.is_relative_to(input_root) or not camera.is_file()):
             raise ValueError('Scene camera must be an uploaded file inside the ComfyUI input directory')
+        if options['method'] == 'sam_camera' and camera is None and not options.get('locked_off'):
+            raise ValueError('SAM 3D Body on camera needs a scene camera (Camera Track) or a locked-off camera')
         box = options.pop('actor_box', '')
         if box:
             box = json.loads(box)
@@ -86,7 +94,7 @@ class MocapProcessVideo:
         bundle = output/'result.mocap.zip'
         if camera is not None:
             options['scene_camera'] = camera_name
-        plan = ['prepare', 'gvhmr']+(['sam'] if options['method'] == 'hybrid' else [])+(['face'] if options['face_capture'] == 'realdenseface_flame' else [])+['export']
+        plan = ['prepare']+INFERENCE[options['method']]+(['face'] if options['face_capture'] == 'realdenseface_flame' else [])+['export']
         progress = comfy.utils.ProgressBar(len(plan))
         started = time.time()
         state = dict(state='running', stage_key='prepare', stage='Starting worker', stages=plan,
