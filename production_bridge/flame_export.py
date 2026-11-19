@@ -12,17 +12,19 @@ from scipy import sparse
 from scipy.sparse.csgraph import dijkstra
 from scipy.spatial.transform import Rotation
 from rig_export import compact_weights, preserve_fitted_surface
+import face_assets
 
 BONES = ['FLAME_root', 'FLAME_jaw', 'FLAME_eye.L', 'FLAME_eye.R']
 
 
-def model_assets(study, identity, expressions):
+def model_assets(study, identity, expressions, model=face_assets.FLAME_NAME):
     shim = Path(study)/'vendor/RealDenseFace/common/fix_chumpy.py'
     spec = importlib.util.spec_from_file_location('flame_compat', shim)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     # Trusted server asset only; never unpickle an uploaded result.
-    with (Path(study)/'models/face/flame_downloads/FLAME2023/flame2023.pkl').open('rb') as f:
+    # The model the fit used (face_worker.py records it); the replay check below fails loudly if they ever differ.
+    with face_assets.flame_model_path(study, model).open('rb') as f:
         data = pickle.load(f, encoding='latin1')
     directions = np.asarray(data['shapedirs'], dtype=np.float64)
     neutral = np.asarray(data['v_template']) + np.einsum('vce,e->vc', directions[..., :300], identity)
@@ -43,7 +45,8 @@ CUDA build has USE_POSE_BS=false. Match those conventions exactly.
     x = params['x']
     if x.shape != (frames, expressions+18):
         raise ValueError('Unsupported FLAME parameter layout')
-    neutral, joints, dirs, weights = model_assets(study, params['identity'], expressions)
+    model = face_assets.fitted_model(params)
+    neutral, joints, dirs, weights = model_assets(study, params['identity'], expressions, model)
     count = len(neutral)
     offset = arrays['vertices_world'].shape[1]-count
     if offset <= 0 or weights.shape != (count, 5):
@@ -139,7 +142,9 @@ CUDA build has USE_POSE_BS=false. Match those conventions exactly.
                   flame_vertex_offset=np.array(offset, np.int32),
                   flame_neck_mask=fade.astype(np.float32),
                   flame_bone_quaternions=q.astype(np.float32))
-    return dict(version=1, model='FLAME2023', expressions=expressions,
+    credit = face_assets.FLAME_CREDIT if model == face_assets.FLAME_NAME else \
+        'Face model: FLAME 2023 (MPI-IS, non-commercial licence); capture fitted before 0.8.0'
+    return dict(version=1, model=model, credit=credit, expressions=expressions,
                 bones=BONES[1:], solver_replay_max_m=replay_error,
                 surface_reconstruction_error_m=error,
                 protected_neck_vertices=int((fade==0).sum()),

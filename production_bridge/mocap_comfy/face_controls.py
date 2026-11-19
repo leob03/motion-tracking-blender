@@ -13,7 +13,7 @@ from mathutils import Quaternion, Vector
 
 from .face import BONES, PREFIX, key_face, target
 
-# Fixed FLAME2023 topology: nearest vertices to standard face landmarks 17..67.
+# Fixed FLAME topology (identical in FLAME 2023 and FLAME 2023 Open): nearest vertices to standard face landmarks 17..67.
 # Semantic indices only, not model geometry or expression weights. Their locations
 # follow the fitted identity and all existing deformation in the artist's scene.
 LANDMARKS = (1983,3157,335,3705,3684,3851,3863,16,2138,570,3553,3561,
@@ -42,7 +42,7 @@ _focus_views = {}
 def offset_for(mesh):
     offset = int(mesh.get('flame_vertex_offset', len(mesh.data.vertices)-5023))
     if len(mesh.data.vertices)-offset != 5023 or offset < 0:
-        raise ValueError('Visual controls require the FLAME2023 5023-vertex head')
+        raise ValueError('Visual controls require the 5023-vertex FLAME head')
     return offset
 
 

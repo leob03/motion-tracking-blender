@@ -1,5 +1,5 @@
 bl_info = {
-    'name': 'Mocap ComfyUI', 'author': 'Innovation', 'version': (0, 7, 1),
+    'name': 'Mocap ComfyUI', 'author': 'Innovation', 'version': (0, 8, 0),
     'blender': (4, 2, 0), 'location': '3D View > Sidebar > Mocap',
     'description': 'Submit footage to ComfyUI and import editable body rigs, mesh, and cameras',
     'category': 'Animation',

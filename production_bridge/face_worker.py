@@ -1,6 +1,8 @@
 """Fit RealDenseFace/FLAME to the selected actor and attach a joined FLAME head.
 Reuses the study's semantic alignment and lower-neck fairing, preserving the
 SAM body/hands and taking head orientation from SAM rather than the face fit.
+The head model is FLAME 2023 Open (CC-BY-4.0); it is placed with SAM 3D Body's
+own face keypoints and their FLAME Open embedding (see face_assets.py).
 """
 import argparse
 import fcntl
@@ -16,6 +18,7 @@ import cv2
 import numpy as np
 import torch
 from progress import report
+import face_assets
 
 
 def main():
@@ -41,7 +44,6 @@ def main():
     from tracker import FLAMEConfig, GNFlameOptimizer, GNFlameOptimizerConfig, load_fitting_config
     from common.types import InferenceOutput, FittingOutput
     from join_neck import join
-    import smplx
 
     base = root/'results/shot'
     out = base/'face'
@@ -79,7 +81,7 @@ def main():
     gc.collect()
     torch.cuda.empty_cache()
     prior = InferenceOutput(**{key: np.stack(value) for key, value in fields.items()}, image_width=meta['width'], image_height=meta['height'])
-    flame_path = study/'models/face/flame_downloads/FLAME2023/flame2023.pkl'
+    flame_path = face_assets.flame_model_path(study)
     config = load_fitting_config('configs/fitting/video_offline.yaml', GNFlameOptimizerConfig,
                                  flame=FLAMEConfig(flame_model_path=str(flame_path)), device='cuda')
     optimizer = GNFlameOptimizer(config)
@@ -98,7 +100,8 @@ def main():
     params = dict(identity=fit.identity.cpu().numpy(), x=fit.x.cpu().numpy(),
                   camera_fov_y=np.array(fit.camera_fov_y if fit.camera_fov_y is not None else np.nan),
                   canonical_vertices=canonical, expression_count=np.array(expressions),
-                  parameter_format=np.array('RealDenseFace FLAME2023; original fitted x, not MHR coefficients'))
+                  parameter_format=np.array('RealDenseFace '+face_assets.FLAME_NAME+'; original fitted x, not MHR coefficients'),
+                  flame_model=np.array(face_assets.FLAME_NAME))
     fitted = time.perf_counter()
     if not np.isfinite(canonical).all():
         raise ValueError('Nonfinite FLAME face fit')
@@ -110,22 +113,16 @@ def main():
         body = data['vertices_camera']
         body_faces = data['faces']
     report('face', 'Attaching FLAME head and joining the neck')
-    # SMPL-X provides semantic landmark indices; no coefficient transfer or body solve.
-    smpl = smplx.SMPLX('/home/innovation/dev-lbringer/ComfyUI_nightly/models/motion_capture/body_models/smplx/SMPLX_NEUTRAL.npz', use_pca=False)
-    triangle = smpl.faces[smpl.lmk_faces_idx.numpy()]
-    with np.load(study/'vendor/MHR/tools/mhr_smpl_conversion/assets/mhr2smplx_mapping.npz') as mapping:
-        mapped = body_faces[mapping['triangle_ids'][triangle]]
-        weights = mapping['baryc_coords'][triangle]*smpl.lmk_bary_coords.numpy()[:, :, None]
-    landmarks = (body[:, mapped]*weights[None, :, :, :, None]).sum((2, 3))
-    embed = np.load(study/'vendor/smirk/assets/landmark_embedding.npy', allow_pickle=True, encoding='latin1').item()
-    tri = head_faces[embed['static_lmk_faces_idx']]
-    bary = embed['static_lmk_bary_coords']
-    neutral_landmarks = (neutral[tri]*bary[:, :, None]).sum(1)
-    stable = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 22, 25, 28]
-    A = neutral_landmarks[stable]
+    # The same SAM face keypoints on both meshes: on SAM's body through SAM's own keypoint map, on the FLAME
+    # neutral through their FLAME Open embedding. Only the stable ones (eye corners, nose) place the head.
+    embed = face_assets.landmarks()
+    stable = embed['stable']
+    landmarks = np.einsum('kv,fvd->fkd', face_assets.face_keypoint_map(study, stable), body.astype(np.float32))
+    tri = head_faces[embed['lmk_faces_idx'][stable]]
+    A = (neutral[tri]*embed['lmk_bary_coords'][stable][:, :, None]).sum(1)
     anchor = A.mean(0)
     A = A-anchor
-    B = landmarks[:, stable]
+    B = landmarks
     centers = B.mean(1)
     B = B-centers[:, None]
     u, _, vt = np.linalg.svd(A.T[None]@B)
@@ -137,7 +134,8 @@ def main():
     with np.load(study/'vendor/MHR/tools/mhr_smpl_conversion/assets/head_hand_mask.npz') as masks:
         mask = masks['head_mask'] > .5
     cut_faces = body_faces[~mask[body_faces].any(1)]
-    support = np.unique(head_faces[np.concatenate([embed['dynamic_lmk_faces_idx'].ravel(), embed['static_lmk_faces_idx'].ravel()])])
+    # Kept exactly as fitted during neck smoothing: the faces carrying SAM face keypoints and the jaw-skinned chin edge.
+    support = embed['protected_vertices'].astype(np.int64)
     vertices, faces, neck = join(body, cut_faces, head, head_faces, rotation, support)
     assert np.array_equal(vertices[:, :len(body[0])], body)
     assert np.array_equal(vertices[:, len(body[0])+support], head[:, support])
@@ -145,7 +143,11 @@ def main():
     params.update(flame_to_camera_rotation=rotation, flame_to_camera_scale=scale,
                   flame_neutral_anchor=anchor, mhr_head_anchor_camera=centers)
     np.savez_compressed(out/'parameters.npz', **params)
-    metrics = dict(method='RealDenseFace FLAME2023 joined head', frames=len(body),
+    residual = np.linalg.norm(A@rotation*scale-B, axis=-1)
+    metrics = dict(method='RealDenseFace '+face_assets.FLAME_NAME+' joined head', frames=len(body),
+                   flame_model=face_assets.FLAME_NAME, credit=face_assets.FLAME_CREDIT,
+                   placement='SAM 3D Body face keypoints (eye corners, nose) matched to their FLAME Open embedding',
+                   placement_residual_mm_median=float(np.median(residual)*1000),
                    dense_inference_seconds=inferred-started, fitting_seconds=fitted-inferred,
                    total_seconds=time.perf_counter()-started, scale=scale, neck_join=neck,
                    body_vertex_count=len(body[0]), head_vertex_count=len(head[0]),

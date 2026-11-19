@@ -1,17 +1,17 @@
 {
-  "date": "2026-11-18",
-  "addon_version": "0.7.1",
-  "note": "Current source hashes for 0.7.1 (0.7.0 SAM 3D Body on camera, locked-off lens, Level from Actor; 0.7.1 worker node accepts it). Original preserved snapshot remains at Git tag v0.3.1; model assets and generated results are excluded.",
+  "date": "2026-11-19",
+  "addon_version": "0.8.0",
+  "note": "Current source hashes for 0.8.0 (0.8.0: D-FINE-L person detector replaces YOLO; FLAME 2023 Open head placed with SAM 3D Body face keypoints replaces FLAME 2023 + SMPL-X + SMIRK). Original preserved snapshot remains at Git tag v0.3.1; model assets and generated results are excluded.",
   "files": [
     {
       "path": "production_bridge/worker.py",
-      "sha256": "f7e893409cdf44cc7aa57fab568744396183695aff4df06670aa202dcb9f0fc8",
-      "bytes": 48746
+      "sha256": "6e29396bed8f6c33b3fa8d6cb83b1ef02c49b7f8438b268dc8ee470e9d0e9bfb",
+      "bytes": 50703
     },
     {
       "path": "production_bridge/face_worker.py",
-      "sha256": "876b478321b9bf4fd7adbf0fe7d5bd49d1741763a0ed60b57802562211d50c81",
-      "bytes": 8601
+      "sha256": "fe1d9d8f42a8a63880a3b621917146483c5054c803385edd7296e65989951ff5",
+      "bytes": 8733
     },
     {
       "path": "production_bridge/rig_export.py",
@@ -45,7 +45,7 @@
     },
     {
       "path": "production_bridge/mocap_comfy/__init__.py",
-      "sha256": "211e0bb63a95af1d85ef3036d302a9e44475d3ed57e8bbdd19a18124c0f105e4",
+      "sha256": "eb18afaeb87f8574f3e76640c2771530e24b8b0bf8a44c62738c0d985280f053",
       "bytes": 75397
     },
     {
@@ -130,8 +130,8 @@
     },
     {
       "path": "production_bridge/flame_export.py",
-      "sha256": "49ca7c20f3b6fbb85a34bfeca1f6e3aeb7bd6ce2f4b360154c00504187504e41",
-      "bytes": 8489
+      "sha256": "abd9196136a6ca70d692b5cfea89e20912068eb6476ce78b0205d9539e1777ca",
+      "bytes": 8864
     },
     {
       "path": "production_bridge/mocap_comfy/face.py",
@@ -155,8 +155,8 @@
     },
     {
       "path": "production_bridge/mocap_comfy/face_controls.py",
-      "sha256": "b631e0cfdf15a349148824d1e5cb976de39049bea4d39e08f7d0b80fab9c4e65",
-      "bytes": 19325
+      "sha256": "5a656c9b2faeb5920bf6bcb8ed79655ad72ca939661b0f052b1cc63e0c4a5d48",
+      "bytes": 19363
     },
     {
       "path": "production_bridge/tests/blender_face_controls.py",
@@ -342,6 +342,21 @@
       "path": "production_bridge/third_party/geocalib/utils.py",
       "sha256": "cb87f01a58357d45ec53e009f80deacfdcc3d4de6ed1e7337b859f1bae5e1570",
       "bytes": 11578
+    },
+    {
+      "path": "production_bridge/face_assets.py",
+      "sha256": "d627b8f4781695a8f021e040603c9d283a88b3ffcf859ed2206080cbbbe76905",
+      "bytes": 2928
+    },
+    {
+      "path": "production_bridge/assets/flame_open_mhr_landmarks.npz",
+      "sha256": "d4e4e561a6dfc102e7f11dd0b5b536b8d4d2eef35f537b9566176cb530b1645a",
+      "bytes": 10550
+    },
+    {
+      "path": "production_bridge/tools/make_flame_landmarks.py",
+      "sha256": "b3a35f70a6b50b1e65a93677a81fda68a7c22fe0204f419e41d5220bae40659e",
+      "bytes": 5865
     }
   ]
 }
