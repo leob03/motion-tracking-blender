@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "audited": "2026-10-15",
+  "audited": "2026-11-19",
   "hash_method": "Sequential 8 MiB reads of explicitly listed assets; no directory scans.",
   "root_meanings": {
     "nightly_models": "ComfyUI_nightly/models (currently fixed development path)",
@@ -9,7 +9,8 @@
   },
   "hf_revisions": {
     "apozz/motion-capture-safetensors": "4d1ff1105aad31ef01d2aa2c1151a0317d267925",
-    "Comfy-Org/sam-3d-body": "7c974aea58e062252a6cb5b6f9b7f639d545b729"
+    "Comfy-Org/sam-3d-body": "7c974aea58e062252a6cb5b6f9b7f639d545b729",
+    "ustc-community/dfine-large-coco": "aa8f8211545e4cff5adf52ea512f9ac74a9824ec"
   },
   "files": [
     {
@@ -55,17 +56,46 @@
       "upstream_sha256_matches": true
     },
     {
-      "id": "actor_detector",
-      "root": "nightly_models",
-      "path": "ultralytics/segm/yolov8m-seg.pt",
+      "id": "person_detector",
+      "root": "study",
+      "path": "models/person_detector/dfine-large-coco/model.safetensors",
       "features": [
         "all"
       ],
-      "url": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8m-seg.pt",
+      "url": "https://huggingface.co/ustc-community/dfine-large-coco/resolve/aa8f8211545e4cff5adf52ea512f9ac74a9824ec/model.safetensors",
       "source_kind": "download",
       "aliases": [],
-      "bytes": 54899779,
-      "sha256": "f9fc740ca0824e14b44681d491dc601efa664ec6ecea9a870acf876053826448"
+      "bytes": 125618504,
+      "sha256": "4e9d77ba937ab6eb8537b183c1c05372262daaa552e7682d721417042e24a8dc",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "person_detector_config",
+      "root": "study",
+      "path": "models/person_detector/dfine-large-coco/config.json",
+      "features": [
+        "all"
+      ],
+      "url": "https://huggingface.co/ustc-community/dfine-large-coco/resolve/aa8f8211545e4cff5adf52ea512f9ac74a9824ec/config.json",
+      "source_kind": "download",
+      "aliases": [],
+      "bytes": 6959,
+      "sha256": "f2c0253fc97a75269dc4016e373122f87f7efa7d675d4ad0dedea6f050136b8d",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "person_detector_preprocessor",
+      "root": "study",
+      "path": "models/person_detector/dfine-large-coco/preprocessor_config.json",
+      "features": [
+        "all"
+      ],
+      "url": "https://huggingface.co/ustc-community/dfine-large-coco/resolve/aa8f8211545e4cff5adf52ea512f9ac74a9824ec/preprocessor_config.json",
+      "source_kind": "download",
+      "aliases": [],
+      "bytes": 470,
+      "sha256": "7e9e2245806aa3ef068a5321f5eebee3116fa4cec560173231954ffaca930eca",
+      "license": "Apache-2.0"
     },
     {
       "id": "smplx_neutral",
@@ -173,30 +203,18 @@
       "sha256": "922cb76f3afef0c2e9801a63991de269a98e6b67b1728232493f851589151dd3"
     },
     {
-      "id": "flame2023",
+      "id": "flame2023_open",
       "root": "study",
-      "path": "models/face/flame_downloads/FLAME2023/flame2023.pkl",
+      "path": "models/face/flame_downloads/FLAME2023_Open/flame2023_Open.pkl",
       "features": [
         "realdenseface_flame"
       ],
       "url": "https://flame.is.tue.mpg.de/",
       "source_kind": "registration_download",
       "aliases": [],
-      "bytes": 53023716,
-      "sha256": "8fb1af0db1abb51053ead8fd1f2624a63d01c9602f4a4fb4ea23bd2c82017fa0"
-    },
-    {
-      "id": "mhr2smplx_mapping.npz",
-      "root": "study",
-      "path": "vendor/MHR/tools/mhr_smpl_conversion/assets/mhr2smplx_mapping.npz",
-      "features": [
-        "realdenseface_flame"
-      ],
-      "url": "https://raw.githubusercontent.com/facebookresearch/MHR/d96fafa33bbf018647c70c3525e91f53e79d2a14/tools/mhr_smpl_conversion/assets/mhr2smplx_mapping.npz",
-      "source_kind": "source_asset",
-      "aliases": [],
-      "bytes": 249356,
-      "sha256": "d6d023f9f483be73cd4491d0ddf217450627263405c9bc6bf43795dfff809af1"
+      "bytes": 53023668,
+      "sha256": "e75a0990728ba038c7da2a420ae4396f7ddd7781366c13026066c5b24f127623",
+      "license": "CC-BY-4.0"
     },
     {
       "id": "head_hand_mask.npz",
@@ -210,19 +228,6 @@
       "aliases": [],
       "bytes": 222040,
       "sha256": "60a64a305731dcc1c09f167dfa844246443b3115ae05abebe3813aa64a9ba2ae"
-    },
-    {
-      "id": "flame_landmark_embedding",
-      "root": "study",
-      "path": "vendor/smirk/assets/landmark_embedding.npy",
-      "features": [
-        "realdenseface_flame"
-      ],
-      "url": "https://raw.githubusercontent.com/georgeretsi/smirk/c7de404c4389f073906a6db1adabf62efcea3f35/assets/landmark_embedding.npy",
-      "source_kind": "source_asset",
-      "aliases": [],
-      "bytes": 31292,
-      "sha256": "8095348eeafce5a02f6bd8765146307f9567a3f03b316d788a2e47336d667954"
     },
     {
       "id": "smpl_mean_params",
@@ -253,5 +258,5 @@
       "note": "Apache-2.0 (GeoCalib). Only used by SAM 3D Body on camera for locked-off plates without lens metadata or a typed focal length."
     }
   ],
-  "total_unique_bytes": 9495219111
+  "total_unique_bytes": 9565664569
 }

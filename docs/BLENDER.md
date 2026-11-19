@@ -2,7 +2,7 @@
 
 ## Install
 
-Build `mocap_comfy-0.7.1.zip` with `python scripts/build_packages.py` (output in `dist/`). Install it through **Edit → Preferences → Add-ons → Install from Disk**, enable **Mocap ComfyUI**, then restart Blender. Blender 4.4.0 on Linux is tested; Windows remains unvalidated.
+Build `mocap_comfy-0.8.0.zip` with `python scripts/build_packages.py` (output in `dist/`). Install it through **Edit → Preferences → Add-ons → Install from Disk**, enable **Mocap ComfyUI**, then restart Blender. Blender 4.4.0 on Linux is tested; Windows remains unvalidated.
 
 The worker URL, optional bearer token and download folder are **add-on preferences** (shared by all scenes; also shown in the **Worker** sub-panel). For a local worker use `http://127.0.0.1:8188`. A remote worker can use the team's approved HTTP(S) endpoint or an SSH tunnel:
 

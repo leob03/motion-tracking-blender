@@ -6,6 +6,8 @@ Version **0.7.0** adds **SAM 3D Body on camera**, the new default body method: S
 
 Version **0.7.1** fixes the worker's ComfyUI node, which 0.7.0 left unchanged: it now accepts the `sam_camera` method and the locked-off lens options, so Submit works from Blender. Restart the worker after updating; an older worker now gives a clear "update and restart the worker" message instead of a ComfyUI validation error.
 
+Version **0.8.0** makes the default path and the FLAME face commercially usable (see [docs/LICENSING.md](docs/LICENSING.md)). The worker finds actors with D-FINE-L (Apache-2.0) instead of Ultralytics YOLO (AGPL-3.0), in the job and in **Detect Actors**; results matched YOLO's on a five-shot test. The RealDenseFace + FLAME head now uses FLAME 2023 Open (CC-BY-4.0) and is placed with SAM 3D Body's own face keypoints instead of SMPL-X and SMIRK assets; faces look the same as before. FLAME results carry the required FLAME credit. The worker needs the D-FINE weights and FLAME 2023 Open ([models](docs/MODELS.md)); the Blender side is unchanged apart from wording.
+
 Version **0.6.0** reworked the workflow: image-sequence (EXR/DPX/TIFF/PNG) plates with OCIO-tone-mapped upload proxies, one-time uploads, an actor preview (**Detect Actors**), presets, a job list for queuing several actors, and **Export to Nuke**. A **solved scene camera** (for example from the ViPE Remote Tracking add-on) can drive the job: GVHMR uses its rotations and the body is placed in that camera's world with a depth-preserving plate lock. On the worker, a near-lossless intermediate video, GPU actor detection, a focal-length fix for camera odometry and optional warm models shorten jobs. The 0.5.0 face controls are unchanged. The original reviewed handoff remains at tag `v0.3.1`.
 
 | Mode | Body and world placement | Hands / face |
@@ -33,7 +35,7 @@ Build the current artist add-on and worker packages using ordinary Python 3:
 python scripts/build_packages.py
 ```
 
-Install `dist/mocap_comfy-0.7.1.zip` in Blender. The separate `mocap_worker_snapshot-0.7.1.zip` preserves the worker/helper directory layout; it is **not** a standalone custom-node ZIP. Follow the worker setup guide to install its custom-node symlink.
+Install `dist/mocap_comfy-0.8.0.zip` in Blender. The separate `mocap_worker_snapshot-0.8.0.zip` preserves the worker/helper directory layout; it is **not** a standalone custom-node ZIP. Follow the worker setup guide to install its custom-node symlink.
 
 ## What this repository preserves
 

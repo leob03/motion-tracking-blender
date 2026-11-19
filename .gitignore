@@ -28,3 +28,4 @@ comparison_study/inference.lock
 *.npy
 *.so
 *.log
+!production_bridge/assets/*.npz

@@ -19,7 +19,7 @@ Included project files are under `production_bridge/` and `comparison_study/`. T
 - `join_neck.py`: fixed-topology neck joining/fairing for the optional FLAME head.
 - `run_model.py`: launches the actual reviewed GVHMR/SAM ports and exports intermediate geometry/rigs.
 
-The original study portal, videos, Blender review scenes, Pixel3DMM and SMIRK fitting workers are not required. SMIRK contributes only one landmark-embedding asset to the FLAME attachment. MHR contributes two topology assets; the standalone MHR inference package/FBX releases are not needed by this adapter.
+The original study portal, videos, Blender review scenes, Pixel3DMM and SMIRK fitting workers are not required. Since 0.8.0 nothing from SMIRK or SMPL-X is used by the FLAME attachment: the head is placed with SAM 3D Body's own face keypoints and the landmark file in `production_bridge/assets/`. MHR contributes its head mask (and, only for regenerating that landmark file, its TorchScript model); the standalone MHR inference package/FBX releases are not needed by this adapter.
 
 External source commits and selected checksums are in [source-pins.json](../provenance/source-pins.json). A scoped RealDenseFace patch is included. It preserves the reviewed Turing-compatible BF16 guard and lazy creation of the disabled visibility rasterizer. Apply it to the recorded commit before building/testing. These are source pins and selected-file checks, not a full audit of every external worktree.
 
@@ -41,13 +41,11 @@ git clone https://github.com/LinzhouLi/RealDenseFace.git "$mocap_study/vendor/Re
 git -C "$mocap_study/vendor/RealDenseFace" checkout --detach 2821455af2c5d8996aec14000b37abf5dacc24f1
 git clone https://github.com/facebookresearch/MHR.git "$mocap_study/vendor/MHR"
 git -C "$mocap_study/vendor/MHR" checkout --detach d96fafa33bbf018647c70c3525e91f53e79d2a14
-git clone https://github.com/georgeretsi/smirk.git "$mocap_study/vendor/smirk"
-git -C "$mocap_study/vendor/smirk" checkout --detach c7de404c4389f073906a6db1adabf62efcea3f35
 git -C "$mocap_study/vendor/RealDenseFace" apply \
   "$mocap_checkout/provenance/patches/realdenseface.patch"
 ```
 
-The last three source checkouts are only needed for the optional FLAME path; MHR and SMIRK may instead be staged as the exact asset files listed in the model manifest. Source clone commands above are a setup recipe, not operations performed on your installed development repositories during this handoff. Do not run `git clone` into existing nonempty paths.
+The last two source checkouts are only needed for the optional FLAME path; MHR may instead be staged as the exact asset file listed in the model manifest. Source clone commands above are a setup recipe, not operations performed on your installed development repositories during this handoff. Do not run `git clone` into existing nonempty paths.
 
 ## Existing fixed layout
 
@@ -57,8 +55,7 @@ The last three source checkouts are only needed for the optional FLAME path; MHR
 | --- | --- |
 | `/home/innovation/dev-lbringer/ComfyUI_nightly` | `comparison_study/run_model.py`: GVHMR host and models root |
 | Above + `custom_nodes/ComfyUI-MotionCapture` | Reviewed inference/body-model port |
-| Above + `models/ultralytics/segm/yolov8m-seg.pt` | `worker.py`: CPU actor detection |
-| Above + `models/motion_capture/body_models/smplx/SMPLX_NEUTRAL.npz` | `face_worker.py`: semantic landmark lookup |
+| Above + `models/motion_capture/body_models/smplx/SMPLX_NEUTRAL.npz` | GVHMR fallback body model |
 
 Preserving those mount/symlink paths reproduces the current layout. Replacing them with configurable paths is a proposed follow-up, not a feature of this snapshot.
 
@@ -69,11 +66,11 @@ run_model.py, character_selection.py, build_root_orientation.py,
 build_hybrid_candidates.py, join_neck.py       # included
 vendor/ComfyUI/                              # pinned SAM host
 models/sam_3d_body_dinov3_bf16.safetensors
+models/person_detector/dfine-large-coco/     # D-FINE-L person detector (3 files)
 vendor/RealDenseFace/                        # optional face source + patch + built solver
 face_deps/                                  # optional timm 1.0.30 overlay
-models/face/flame_downloads/FLAME2023/flame2023.pkl
-vendor/MHR/tools/mhr_smpl_conversion/assets/ # two listed topology assets
-vendor/smirk/assets/landmark_embedding.npy
+models/face/flame_downloads/FLAME2023_Open/flame2023_Open.pkl   # FLAME 2023 Open (CC-BY-4.0)
+vendor/MHR/tools/mhr_smpl_conversion/assets/head_hand_mask.npz
 ```
 
 Keep `production_bridge/` and `comparison_study/` siblings when using the included helpers: `run_model.py` imports progress/rig export from its parent's `production_bridge` directory. The study root needs write access for `inference.lock`; this POSIX lock serializes this runtime's inference. It does not coordinate unrelated containers unless they share the same lock.

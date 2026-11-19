@@ -22,7 +22,10 @@ from rig_export import read_sam_rig, attach_flame_weights, preserve_fitted_surfa
 import scene_camera
 import tracking
 
-DETECTOR = '/home/innovation/dev-lbringer/ComfyUI_nightly/models/ultralytics/segm/yolov8m-seg.pt'
+# Person detector: D-FINE-L trained on COCO (Apache-2.0 code and weights), read from the study's models folder.
+DETECTOR = 'models/person_detector/dfine-large-coco'
+DETECTOR_THRESHOLD = .5
+DETECTOR_BATCH = 8
 # Bundle Y-up world -> Blender Z-up world (the importer applies the forward direction).
 Y_UP_TO_Z_UP = np.array([[1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, 0, 0, 1]], dtype=float)
 
@@ -35,15 +38,35 @@ def status(root, stage):
     report(keys[stage], stage)
 
 
-def person_detector():
-    """YOLO person boxes on the GPU when available (about 20x faster than the CPU path)."""
+def person_detector(study):
+    """Person boxes (xyxy pixels) for a list of BGR frames, with D-FINE-L on the GPU when available.
+
+    Replaced Ultralytics YOLOv8 (AGPL-3.0) in 0.8.0; on the five-shot A/B test the results matched YOLO's
+    within its own run-to-run noise. Returns detect(frames) -> one box list per frame, and close().
+    """
     import torch
-    from ultralytics import YOLO
-    model = YOLO(DETECTOR)
+    from transformers import AutoImageProcessor, AutoModelForObjectDetection
+    path = Path(study)/DETECTOR
+    if not (path/'model.safetensors').is_file():
+        raise FileNotFoundError(f'Person detector weights missing: {path} (see docs/MODELS.md)')
     gpu = torch.cuda.is_available()
-    def detect(frame):
-        result = model.predict(frame, classes=[0], verbose=False, device=0 if gpu else 'cpu', half=gpu)[0]
-        return result.boxes.xyxy.cpu().numpy().astype(float).tolist()
+    device = 'cuda' if gpu else 'cpu'
+    processor = AutoImageProcessor.from_pretrained(path, use_fast=True, local_files_only=True)
+    model = AutoModelForObjectDetection.from_pretrained(path, local_files_only=True).to(device).eval()
+    person = {name.lower(): int(index) for index, name in model.config.id2label.items()}['person']
+    def detect(frames):
+        images = [cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) for frame in frames]
+        if gpu:  # resize/normalise on the GPU: about half the time per frame (batches of 8: ~16 ms, like YOLO)
+            images = [torch.from_numpy(image).to(device).permute(2, 0, 1) for image in images]
+            inputs = processor(images=images, return_tensors='pt', device=device)
+        else:
+            inputs = processor(images=images, return_tensors='pt')
+        with torch.no_grad(), torch.autocast('cuda', enabled=gpu):
+            out = model(**inputs)
+        out.logits, out.pred_boxes = out.logits.float(), out.pred_boxes.float()
+        results = processor.post_process_object_detection(out, target_sizes=[f.shape[:2] for f in frames],
+                                                          threshold=DETECTOR_THRESHOLD)
+        return [r['boxes'][r['labels'] == person].cpu().numpy().astype(float).tolist() for r in results]
     def close():
         nonlocal model
         model = None
@@ -86,7 +109,7 @@ def actor_crop(frame, box, number, size=192):
     return base64.b64encode(jpeg.tobytes()).decode()
 
 
-def detect_actors(source, frame_index, max_side, fps_override, output):
+def detect_actors(source, frame_index, max_side, fps_override, output, study):
     """Preflight for the add-on: numbered person boxes on one frame, without inference."""
     plate = Plate(source, fps_override)
     frame = plate.frame(frame_index)
@@ -95,8 +118,8 @@ def detect_actors(source, frame_index, max_side, fps_override, output):
     source_h, source_w = frame.shape[:2]
     w, h = processing_size(source_w, source_h, max_side)
     frame = cv2.resize(frame, (w, h), interpolation=cv2.INTER_AREA)
-    detect, close = person_detector()
-    seeds = sorted(detect(frame), key=lambda b: (b[0]+b[2])/2)
+    detect, close = person_detector(study)
+    seeds = sorted(detect([frame])[0], key=lambda b: (b[0]+b[2])/2)
     close()
     largest = int(np.argmax([(b[2]-b[0])*(b[3]-b[1]) for b in seeds])) if seeds else -1
     ok, jpeg = cv2.imencode('.jpg', draw_actors(frame, seeds, largest), [cv2.IMWRITE_JPEG_QUALITY, 85])
@@ -174,11 +197,11 @@ def locked_off_camera(video, options, study, frames, w, h, source_w):
     return c2w, K, info
 
 
-PREPARED_VERSION = 1
+PREPARED_VERSION = 2  # 2: D-FINE person boxes (1 was YOLO); cached plates from older versions are not reused
 PREPARED_KEEP = 12
 
 
-def prepared_plate(root, source, options, cache_dir=None):
+def prepared_plate(root, source, options, study, cache_dir=None):
     """Downscaled intermediate video and per-frame person boxes for the job range.
 
     Cached per plate range (the upload name is its content hash), so another actor of the same
@@ -197,9 +220,15 @@ def prepared_plate(root, source, options, cache_dir=None):
     plate = Plate(source, options['fps_override'])
     available = max(0, plate.count-options['start_frame'])
     expected = min(available, options['max_frames']) if options['max_frames'] else available
-    detect, close = person_detector()
+    detect, close = person_detector(study)
     detections = []
+    pending = []
     writer = None
+
+    def flush():
+        detections.extend(detect(pending))
+        pending.clear()
+        report('prepare', 'Detecting people on every frame', len(detections), expected or None, frames=expected or None)
     try:
         for frame in plate.read(options['start_frame'], options['max_frames']):
             source_h, source_w = frame.shape[:2]
@@ -208,9 +237,12 @@ def prepared_plate(root, source, options, cache_dir=None):
                 frame = cv2.resize(frame, (w, h), interpolation=cv2.INTER_AREA)
             if writer is None:
                 writer = VideoSink(out / 'input.mp4', plate.fps, w, h)
-            detections.append(detect(frame))
             writer.write(frame)
-            report('prepare', 'Detecting people on every frame', len(detections), expected or None, frames=expected or None)
+            pending.append(frame)
+            if len(pending) == DETECTOR_BATCH:
+                flush()
+        if pending:
+            flush()
     finally:
         close()
         if writer is not None:
@@ -263,7 +295,7 @@ def trim_video(path, first, last, fps, w, h):
 
 def prepare(root, source, options, study, camera_file=None, cache_dir=None):
     status(root, 'Detecting and tracking the selected actor')
-    info = prepared_plate(root, source, options, cache_dir)
+    info = prepared_plate(root, source, options, study, cache_dir)
     out = root / 'inputs' / 'shot'
     fps, w, h, source_w, source_h = info['fps'], info['width'], info['height'], info['source_width'], info['source_height']
     detections = info['detections']
@@ -762,7 +794,7 @@ def main():
     sys.path.insert(0, str(args.study))
     cv2.setNumThreads(2)
     if args.detect is not None:
-        detect_actors(args.video, args.detect, args.max_side, args.fps_override, args.output)
+        detect_actors(args.video, args.detect, args.max_side, args.fps_override, args.output, args.study)
         return
     os.environ.setdefault('MOCAP_STATUS_FILE', str(args.job_root/'status.json'))
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
